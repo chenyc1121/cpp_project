@@ -24,7 +24,7 @@ public:
     QString name() const { return m_name; }
     TileType type() const { return m_type; }
     ColorGroup group() const { return m_group; }
-    int price() const { return m_price; }
+    virtual int price() const { return m_price; }
     QString titleBarText() const { return m_titleBarText; }
     QString infoText() const { return m_infoText; }
 
@@ -64,13 +64,11 @@ public:
 
     // 建造/升级
     bool canBuildHouse(const Player* player) const;
-    void buildHouse();
+    virtual void buildHouse();
     void removeHouses(int count = 1);
 
-    // 计算当前租金（根据房屋数和同色组是否成套）
-    int calculateRent(int diceValue = 0) const;
-    // 判断同色组是否全部被同一玩家拥有
-    bool ownsFullGroup() const;
+    // 计算当前租金（根据房屋数）
+    virtual int calculateRent(int diceValue = 0) const;
 
     // 重置（用于新游戏）
     void reset();
@@ -108,6 +106,22 @@ class StaticvalTile:public Tile{
     int calculateRent(int diceValue = 0) const;
     // 判断同色组是否全部被同一玩家拥有
     bool ownsFullGroup() const;
+}
+
+
+//==================== 虚函数格 ====================
+class VirtualfuncTile:public PropertyTile{
+    explicit PropertyTile(const TileDef& def, int index);
+    void landOn(Player* player, Game* game) override;
+
+    int ratio;//人资产的比例
+    int buy_ratio;//购入价的比例
+    int rent_ratio;//收租的比例
+    int buy_decay;//买入的价格减少
+    int rent_decay;//收租的价格减少
+
+    virtual void buildHouse();
+    virtual int calculateRent(int diceValue = 0) const;
 }
 
 // ==================== 问答格 ====================

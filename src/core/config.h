@@ -23,6 +23,7 @@ enum class TileType {
     UTILITY,        // 公共设施
     RAILROAD        // 铁路/车站
     STATICVAL       // 静态成员变量
+    VIRTUALFUNC     // 虚函数
 };
 
 // 颜色组枚举（用于地产租金加成）
@@ -53,6 +54,13 @@ struct TileDef {
     int houseCost;             // 建一栋房子的费用
     const char* titleBarText;  // 标题栏显示文字
     const char* infoText;      // 格子详情按钮弹窗文字
+
+    //虚函数与多态格特有的
+    int ratio;//人资产的比例
+    int buy_ratio;//购入价的比例
+    int rent_ratio;//收租的比例
+    int buy_decay;//买入的价格减少
+    int rent_decay;//收租的价格减少
 };
 
 // ==================== 效果卡价格常量 ====================
