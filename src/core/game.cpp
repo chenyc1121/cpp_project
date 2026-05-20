@@ -165,7 +165,9 @@ void Game::handleLanding() {
     case TileType::TAX:
         canSkip = true;
         break;
-    case TileType::PROPERTY: {
+    case TileType::PROPERTY:
+    case TileType::STATICVAL:
+    case TileType::VIRTUALFUNC: {
         auto* pt = dynamic_cast<PropertyTile*>(tile);
         if (pt && pt->owner() && pt->owner() != player && !pt->owner()->isBankrupt())
             canSkip = true;
@@ -195,6 +197,9 @@ void Game::handleLanding() {
     }
 
     tile->landOn(player, this);
+
+    // 如果 landOn 触发的回调已经调用了 endTurn，状态不再是 LANDING
+    if (m_state != GameState::LANDING) return;
 
     if (!m_waitingForDecision && !m_waitingForCardDecision) {
         endTurn();
@@ -466,6 +471,96 @@ void Game::declineShopEntrance() {
     if (!m_waitingForDecision) {
         endTurn();
     }
+}
+
+
+// ==================== 虚函数卡操作 ====================
+void Game::buyPropertyVirtualFunc(Player* player, int tileIndex, bool useDerived) {
+    auto* vt = dynamic_cast<VirtualfuncTile*>(m_board->tileAt(tileIndex));
+    if (!vt) return;
+    if (vt->owner() != nullptr) return;
+
+    int price = useDerived ? vt->price() : vt->PropertyTile::price();
+
+    if (!player->canAfford(price)) {
+        logEvent(player->name() + " 钱不够，无法购买！");
+        m_waitingForDecision = false;
+        endTurn();
+        return;
+    }
+
+    if (useDerived) {
+        player->useEffectCard(EffectCardType::VIRTUAL_FUNCTION);
+    }
+
+    player->payMoney(price, this);
+    vt->setOwner(player);
+    player->addProperty(vt);
+    logEvent(player->name() + QString(" 购买了 %1（%2价格），花费 %3 元")
+              .arg(vt->name())
+              .arg(useDerived ? "派生类" : "基类")
+              .arg(price));
+    emit playerUpdated(player);
+    emit boardUpdated();
+    m_waitingForDecision = false;
+    endTurn();
+}
+
+void Game::buildHouseVirtualFunc(Player* player, int tileIndex, bool useDerived) {
+    auto* vt = dynamic_cast<VirtualfuncTile*>(m_board->tileAt(tileIndex));
+    if (!vt || vt->owner() != player) return;
+    if (!vt->canBuildHouse(player)) return;
+
+    int cost = vt->houseCost();  // VirtualfuncTile uses same house cost as PropertyTile
+    if (!player->canAfford(cost)) {
+        logEvent(player->name() + " 钱不够，无法建房！");
+        m_waitingForDecision = false;
+        endTurn();
+        return;
+    }
+
+    if (useDerived) {
+        player->useEffectCard(EffectCardType::VIRTUAL_FUNCTION);
+        vt->VirtualfuncTile::buildHouse();
+    } else {
+        vt->PropertyTile::buildHouse();
+    }
+
+    player->payMoney(cost, this);
+    if (vt->hasHotel()) {
+        logEvent(player->name() + " 在 " + vt->name() + " 建造了旅馆！");
+    } else {
+        logEvent(player->name() + QString(" 在 %1 建造了第 %2 栋房子（%3）")
+                  .arg(vt->name()).arg(vt->houses())
+                  .arg(useDerived ? "派生类" : "基类"));
+    }
+    emit playerUpdated(player);
+    emit boardUpdated();
+    m_waitingForDecision = false;
+    endTurn();
+}
+
+void Game::payRentVirtualFunc(Player* player, int tileIndex, bool useDerived) {
+    auto* vt = dynamic_cast<VirtualfuncTile*>(m_board->tileAt(tileIndex));
+    if (!vt) return;
+
+    Player* owner = vt->owner();
+    if (!owner || owner == player || owner->isBankrupt()) return;
+
+    int rent = useDerived ? vt->VirtualfuncTile::calculateRent() : vt->PropertyTile::calculateRent();
+
+    if (useDerived) {
+        player->useEffectCard(EffectCardType::VIRTUAL_FUNCTION);
+    }
+
+    QString msg = player->name() + " 停在 " + vt->name()
+                  + "（属于" + owner->name() + "），"
+                  + (useDerived ? "使用派生类租金" : "使用基类租金")
+                  + "，支付 " + QString::number(rent) + " 元";
+    logEvent(msg);
+    player->payMoneyTo(rent, owner, this);
+    m_waitingForDecision = false;
+    endTurn();
 }
 
 

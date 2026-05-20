@@ -155,6 +155,14 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onPromptUseCard);
     connect(m_game, &Game::promptUniversalDice,
             this, &MainWindow::onPromptUniversalDice);
+
+    // 虚函数卡
+    connect(m_game, &Game::promptVirtualFuncBuy,
+            this, &MainWindow::onPromptVirtualFuncBuy);
+    connect(m_game, &Game::promptVirtualFuncRent,
+            this, &MainWindow::onPromptVirtualFuncRent);
+    connect(m_game, &Game::promptVirtualFuncBuild,
+            this, &MainWindow::onPromptVirtualFuncBuild);
 }
 
 
@@ -313,13 +321,28 @@ void MainWindow::updatePropertyDisplay() {
 
         for (PropertyTile* pt : player->properties()) {
             hasItems = true;
-            QColor c = chipColorForGroup(pt->group());
+            QColor c;
+            if (pt->type() == TileType::STATICVAL) {
+                c = QColor("#FFD700");  // 金色 — 静态成员变量
+            } else if (pt->type() == TileType::VIRTUALFUNC) {
+                c = QColor("#7C4DFF");  // 紫色 — 虚函数
+            } else {
+                c = chipColorForGroup(pt->group());
+            }
+            QString typeLabel;
+            if (pt->type() == TileType::STATICVAL) {
+                typeLabel = "静态变量组";
+            } else if (pt->type() == TileType::VIRTUALFUNC) {
+                typeLabel = "虚函数格";
+            } else {
+                typeLabel = colorGroupName(pt->group());
+            }
             auto* chip = new QLabel(pt->name(), playerGroup);
             chip->setStyleSheet(QString(
                 "background-color: %1; color: white; border-radius: 3px; "
                 "padding: 1px 6px; font-size: 10px; font-weight: bold;")
                 .arg(c.name()));
-            chip->setToolTip(pt->name() + " (" + colorGroupName(pt->group()) + ")");
+            chip->setToolTip(pt->name() + " (" + typeLabel + ")");
             chipsRow->addWidget(chip);
         }
 
@@ -413,6 +436,16 @@ void MainWindow::onPromptBuyProperty(int tileIndex, Player* player) {
     Tile* t = m_game->board().tileAt(tileIndex);
     if (!t) return;
 
+    // 虚函数格 + 有虚函数卡 → 弹出选择对话框
+    if (auto* vt = dynamic_cast<VirtualfuncTile*>(t)) {
+        if (player->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
+            int basePrice = vt->PropertyTile::price();
+            int derivedPrice = vt->price();
+            onPromptVirtualFuncBuy(player, tileIndex, basePrice, derivedPrice);
+            return;
+        }
+    }
+
     QString msg;
     int price = 0;
     if (auto* pt = dynamic_cast<PropertyTile*>(t)) {
@@ -457,6 +490,16 @@ void MainWindow::onPromptBuildHouse(int tileIndex, Player* player) {
     if (!pt->canBuildHouse(player)) {
         m_game->skipAction();
         return;
+    }
+
+    // 虚函数格 + 有虚函数卡 → 弹出选择对话框
+    if (auto* vt = dynamic_cast<VirtualfuncTile*>(pt)) {
+        if (player->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
+            int baseCost = vt->houseCost();
+            int derivedCost = vt->houseCost();  // 建房费相同，但 buildHouse 行为可能不同
+            onPromptVirtualFuncBuild(player, tileIndex, baseCost, derivedCost);
+            return;
+        }
     }
 
     QString info;
@@ -652,6 +695,124 @@ void MainWindow::onPromptUniversalDice(Player* player) {
         m_game->setUniversalDice(spin1->value(), spin2->value());
     } else {
         m_game->onCardDecision(EffectCardType::UNIVERSAL_DICE, false);
+    }
+}
+
+
+// ==================== 虚函数卡交互 ====================
+void MainWindow::onPromptVirtualFuncBuy(Player* player, int tileIndex,
+                                         int basePrice, int derivedPrice) {
+    if (!m_game || !player) return;
+
+    Tile* t = m_game->board().tileAt(tileIndex);
+    if (!t) return;
+
+    QString msg = player->name() + "，是否购买 " + t->name() + "？\n\n"
+                  "🏠 基类价格：¥" + QString::number(basePrice) + "（固定、安全）\n"
+                  "🔀 派生类价格：¥" + QString::number(derivedPrice) + "（需消耗虚函数卡）\n\n"
+                  "当前资金：¥" + QString::number(player->money());
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("虚函数卡 — 购买地产");
+    msgBox.setText(msg);
+
+    QPushButton* baseBtn = msgBox.addButton("基类购买 (¥" + QString::number(basePrice) + ")", QMessageBox::YesRole);
+    QPushButton* derivedBtn = nullptr;
+    if (player->canAfford(derivedPrice)) {
+        derivedBtn = msgBox.addButton("派生类购买 (¥" + QString::number(derivedPrice) + ")", QMessageBox::AcceptRole);
+    }
+    QPushButton* cancelBtn = msgBox.addButton("取消", QMessageBox::RejectRole);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == derivedBtn) {
+        m_game->buyPropertyVirtualFunc(player, tileIndex, true);
+    } else if (msgBox.clickedButton() == baseBtn) {
+        m_game->buyPropertyVirtualFunc(player, tileIndex, false);
+    } else {
+        m_game->logEvent(player->name() + " 放弃购买 " + t->name());
+        m_game->skipAction();
+    }
+}
+
+void MainWindow::onPromptVirtualFuncRent(Player* player, int tileIndex,
+                                          int baseRent, int derivedRent) {
+    if (!m_game || !player) return;
+
+    Tile* t = m_game->board().tileAt(tileIndex);
+    if (!t) return;
+
+    auto* vt = dynamic_cast<VirtualfuncTile*>(t);
+    QString ownerName = vt ? (vt->owner() ? vt->owner()->name() : "?") : "?";
+
+    QString msg = player->name() + "，你停在 " + ownerName + " 的虚函数格 " + t->name() + "！\n\n"
+                  "🏠 基类租金：¥" + QString::number(baseRent) + "（固定、安全）\n"
+                  "🔀 派生类租金：¥" + QString::number(derivedRent) + "（需消耗虚函数卡）\n\n"
+                  "当前资金：¥" + QString::number(player->money());
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("虚函数卡 — 支付租金");
+    msgBox.setText(msg);
+
+    QPushButton* baseBtn = msgBox.addButton("基类付租 (¥" + QString::number(baseRent) + ")", QMessageBox::YesRole);
+    QPushButton* derivedBtn = nullptr;
+    if (player->canAfford(derivedRent) || true) {  // 即使付不起也可以选
+        derivedBtn = msgBox.addButton("派生类付租 (¥" + QString::number(derivedRent) + ")", QMessageBox::AcceptRole);
+    }
+    QPushButton* cancelBtn = msgBox.addButton("跳过（不使用虚函数卡）", QMessageBox::RejectRole);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == derivedBtn) {
+        m_game->payRentVirtualFunc(player, tileIndex, true);
+    } else if (msgBox.clickedButton() == cancelBtn) {
+        // 默认基类付租
+        m_game->payRentVirtualFunc(player, tileIndex, false);
+    } else {
+        m_game->payRentVirtualFunc(player, tileIndex, false);
+    }
+}
+
+void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
+                                           int baseCost, int derivedCost) {
+    if (!m_game || !player) return;
+
+    Tile* t = m_game->board().tileAt(tileIndex);
+    if (!t) return;
+
+    auto* vt = dynamic_cast<VirtualfuncTile*>(t);
+    if (!vt) return;
+
+    QString info;
+    if (vt->houses() < 4) {
+        info = "升级 " + vt->name() + "？\n当前：" + QString::number(vt->houses()) + " 栋房子\n\n";
+    } else {
+        info = "在 " + vt->name() + " 建造旅馆？\n\n";
+    }
+
+    info += "🏠 基类建房费：¥" + QString::number(baseCost) + "\n"
+            "🔀 派生类建房费：¥" + QString::number(derivedCost) + "（需消耗虚函数卡）\n\n"
+            "当前资金：¥" + QString::number(player->money());
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("虚函数卡 — 建房");
+    msgBox.setText(info);
+
+    QPushButton* baseBtn = msgBox.addButton("基类建造 (¥" + QString::number(baseCost) + ")", QMessageBox::YesRole);
+    QPushButton* derivedBtn = nullptr;
+    if (player->canAfford(derivedCost)) {
+        derivedBtn = msgBox.addButton("派生类建造 (¥" + QString::number(derivedCost) + ")", QMessageBox::AcceptRole);
+    }
+    QPushButton* cancelBtn = msgBox.addButton("取消", QMessageBox::RejectRole);
+
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == derivedBtn) {
+        m_game->buildHouseVirtualFunc(player, tileIndex, true);
+    } else if (msgBox.clickedButton() == baseBtn) {
+        m_game->buildHouseVirtualFunc(player, tileIndex, false);
+    } else {
+        m_game->skipAction();
     }
 }
 

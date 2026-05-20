@@ -26,7 +26,9 @@ Tile* Board::tileAt(int index) const {
 QVector<PropertyTile*> Board::allProperties() const {
     QVector<PropertyTile*> props;
     for (auto* t : m_tiles) {
-        if (t->type() == TileType::PROPERTY) {
+        if (t->type() == TileType::PROPERTY
+            || t->type() == TileType::STATICVAL
+            || t->type() == TileType::VIRTUALFUNC) {
             props.append(static_cast<PropertyTile*>(t));
         }
     }

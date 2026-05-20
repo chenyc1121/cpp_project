@@ -46,22 +46,33 @@ double BoardWidget::scaleFactor() const {
 }
 
 // ==================== 地块坐标计算 ====================
+// 8×8网格，4角格+每边6个中间格=28格，每格独立位置无重叠
 QRect BoardWidget::tileRect(int tileIndex) const {
     if (tileIndex < 0 || tileIndex >= BOARD_SIZE) return QRect();
 
     int cell = cellSize();
     int m = MARGIN;
-    int maxIdx = CELLS_PER_SIDE - 1;
+    int last = CELLS_PER_SIDE - 1;  // = 7, 最大坐标索引
 
-    if (tileIndex <= 6) {
-        return QRect(m + tileIndex * cell, m + maxIdx * cell, cell, cell);
-    }
-    if (tileIndex <= 13) {
-        return QRect(m + maxIdx * cell, m + (13 - tileIndex) * cell, cell, cell);
-    }
-    if (tileIndex <= 20) {
-        return QRect(m + (20 - tileIndex) * cell, m, cell, cell);
-    }
+    // 角格
+    if (tileIndex == 0)  return QRect(m, m + last * cell, cell, cell);           // 左下角（起点）
+    if (tileIndex == 7)  return QRect(m + last * cell, m + last * cell, cell, cell); // 右下角（商店）
+    if (tileIndex == 14) return QRect(m + last * cell, m, cell, cell);               // 右上角（上机课）
+    if (tileIndex == 21) return QRect(m, m, cell, cell);                             // 左上角（商店入口）
+
+    // 底边: 1-6，从左到右
+    if (tileIndex <= 6)
+        return QRect(m + tileIndex * cell, m + last * cell, cell, cell);
+
+    // 左边: 8-13，从下到上
+    if (tileIndex <= 13)
+        return QRect(m + last * cell, m + (last - (tileIndex - 7)) * cell, cell, cell);
+
+    // 顶边: 15-20，从右到左
+    if (tileIndex <= 20)
+        return QRect(m + (last - (tileIndex - 14)) * cell, m, cell, cell);
+
+    // 右边: 22-27，从上到下
     return QRect(m, m + (tileIndex - 21) * cell, cell, cell);
 }
 

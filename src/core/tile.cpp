@@ -1,6 +1,7 @@
 #include "tile.h"
 #include "player.h"
 #include "game.h"
+#include "effectcard.h"
 
 // ==================== 工厂函数 ====================
 Tile* createTile(const TileDef& def, int index) {
@@ -14,7 +15,8 @@ Tile* createTile(const TileDef& def, int index) {
     case TileType::SHOP_ENTRANCE: return new ShopEntranceTile(def, index);
     case TileType::UTILITY:       return new UtilityTile(def, index);
     case TileType::RAILROAD:      return new RailroadTile(def, index);
-    case TileType::StaticvalTile  return new StaticvalTile(def,index);
+    case TileType::STATICVAL:     return new StaticvalTile(def, index);
+    case TileType::VIRTUALFUNC:   return new VirtualfuncTile(def, index);
     }
     return nullptr;
 }
@@ -128,20 +130,13 @@ void PropertyTile::reset() {
 
 // ==================== 虚函数格 ====================
 VirtualfuncTile::VirtualfuncTile(const TileDef& def, int index)
-    : Tile(def, index), m_houseCost(def.houseCost)
+    : PropertyTile(def, index),
+      m_ratio(def.ratio),
+      m_buyRatio(def.buy_ratio),
+      m_rentRatio(def.rent_ratio),
+      m_buyDecay(def.buy_decay),
+      m_rentDecay(def.rent_decay)
 {
-    m_rentTable[0] = def.baseRent;
-    m_rentTable[1] = def.rentWith1House;
-    m_rentTable[2] = def.rentWith2House;
-    m_rentTable[3] = def.rentWith3House;
-    m_rentTable[4] = def.rentWith4House;
-    m_rentTable[5] = def.rentWithHotel;
-
-    ratio=def.ratio;//人资产的比例
-    buy_ratio=def.buy_ratio;//购入价的比例
-    rent_ratio=def.rent_ratio;//收租的比例
-    buy_decay=def.buy_decay;//买入的价格减少
-    rent_decay=def.rent_decay;//收租的价格减少
 }
 
 void VirtualfuncTile::landOn(Player* player, Game* game) {
@@ -152,7 +147,17 @@ void VirtualfuncTile::landOn(Player* player, Game* game) {
             emit game->promptBuildHouse(m_index, player);
         }
     } else if (!m_owner->isBankrupt()) {
-        int rent = calculateRent();
+        // 检查虚函数卡 — 由 game 层 emit 信号处理
+        if (player->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
+            int baseRent = PropertyTile::calculateRent();
+            int derivedRent = VirtualfuncTile::calculateRent();
+            game->logEvent(player->name() + " 停在虚函数格 " + m_name
+                           + "（属于" + m_owner->name() + "），可选择基类/派生类租金");
+            emit game->promptVirtualFuncRent(player, m_index, baseRent, derivedRent);
+            return;
+        }
+        // 无虚函数卡，使用基类行为
+        int rent = PropertyTile::calculateRent();
         QString msg = player->name() + " 停在 " + m_name
                       + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元";
         game->logEvent(msg);
@@ -160,61 +165,42 @@ void VirtualfuncTile::landOn(Player* player, Game* game) {
     }
 }
 
-int VirtualfuncTile::price() const { return m_price*buy_ratio+m_owner*ratio-buy_decay; }
-virtual int VirtualfuncTile::calculateRent(int diceValue = 0) const{
+int VirtualfuncTile::price() const {
+    return m_price * m_buyRatio / 100 - m_buyDecay;
+}
+
+int VirtualfuncTile::calculateRent(int) const {
     int level = 0;
     if (m_hasHotel) {
         level = 5;
     } else {
         level = qBound(0, m_houses, 4);
     }
-    int rent = m_rentTable[level];
-    /*if (level == 0 && ownsFullGroup()) {
-        rent *= 2;
-    }*/
-    rent*=rent_ratio;
-    rent-=rent_decay;
-    rent+=m_owner*ratio
+    int rent = m_rentTable[level] * m_rentRatio / 100 - m_rentDecay;
+    if (m_owner) {
+        rent += m_owner->money() * m_ratio / 100;
+    }
+    if (rent < 0) rent = 0;
     return rent;
+}
+
+void VirtualfuncTile::buildHouse() {
+    PropertyTile::buildHouse();
 }
 // ==================== 静态成员变量格 ====================
 StaticvalTile::StaticvalTile(const TileDef& def, int index)
-    : Tile(def, index), m_houseCost(def.houseCost)
+    : PropertyTile(def, index)
 {
-    m_rentTable[0] = def.baseRent;
-    m_rentTable[1] = def.rentWith1House;
-    m_rentTable[2] = def.rentWith2House;
-    m_rentTable[3] = def.rentWith3House;
-    m_rentTable[4] = def.rentWith4House;
-    m_rentTable[5] = def.rentWithHotel;
 }
 
 void StaticvalTile::landOn(Player* player, Game* game) {
-    if (m_owner == nullptr) {
-        emit game->promptBuyProperty(m_index, player);
-    } else if (m_owner == player) {
-        if (canBuildHouse(player)) {
-            emit game->promptBuildHouse(m_index, player);
-        }
-    } else if (!m_owner->isBankrupt()) {
-        int rent = calculateRent();
-        QString msg = player->name() + " 停在 " + m_name
-                      + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元";
-        game->logEvent(msg);
-        player->payMoneyTo(rent, m_owner, game);
-    }
+    PropertyTile::landOn(player, game);
 }
 
 int StaticvalTile::calculateRent(int) const {
-    int level = 0;
-    if (m_hasHotel) {
-        level = 5;
-    } else {
-        level = qBound(0, m_houses, 4);
-    }
-    int rent = m_rentTable[level];
+    int rent = PropertyTile::calculateRent();
     if (ownsFullGroup()) {
-        rent += m_rentTable[0];//若拥有所有该类型地块，收益增加空地地租
+        rent += m_rentTable[0];  // 成套后增加空地基础租金
     }
     return rent;
 }
@@ -222,37 +208,6 @@ int StaticvalTile::calculateRent(int) const {
 bool StaticvalTile::ownsFullGroup() const {
     if (m_owner == nullptr) return false;
     return m_owner->ownsFullGroup(m_group);
-}
-
-bool StaticvalTile::canBuildHouse(const Player* player) const {
-    if (m_hasHotel) return false;
-    if (m_owner == nullptr) return false;
-    if (player == nullptr || m_owner != player) return false;
-    return true;
-}
-
-void StaticvalTile::buildHouse() {
-    if (m_houses < 4) {
-        m_houses++;
-    } else if (m_houses == 4) {
-        m_hasHotel = true;
-        m_houses = 0;
-    }
-}
-
-void StaticvalTile::removeHouses(int count) {
-    if (m_hasHotel) {
-        m_hasHotel = false;
-        m_houses = 4;
-    } else {
-        m_houses = qMax(0, m_houses - count);
-    }
-}
-
-void StaticvalTile::reset() {
-    m_owner = nullptr;
-    m_houses = 0;
-    m_hasHotel = false;
 }
 
 // ==================== 问答格 ====================

@@ -46,9 +46,9 @@ private:
     int cellSize() const;
     double scaleFactor() const;
 
-    static constexpr int CELLS_PER_SIDE = 7;
+    static constexpr int CELLS_PER_SIDE = 8;   // 8格/边（含两个角格）
     static constexpr int MARGIN = 10;
-    static constexpr int REFERENCE_CELL = 78;  // 基准cell大小，用于缩放UI元素
+    static constexpr int REFERENCE_CELL = 68;  // 基准cell大小，用于缩放UI元素（配合8格/边）
 };
 
 #endif // BOARDWIDGET_H

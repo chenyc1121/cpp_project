@@ -66,6 +66,11 @@ public:
     void onCardDecision(EffectCardType cardType, bool used);
     void setUniversalDice(int die1, int die2);
 
+    // === 虚函数卡 ===
+    void buyPropertyVirtualFunc(Player* player, int tileIndex, bool useDerived);
+    void buildHouseVirtualFunc(Player* player, int tileIndex, bool useDerived);
+    void payRentVirtualFunc(Player* player, int tileIndex, bool useDerived);
+
     // === 商店 ===
     void buyEffectCard(Player* player, EffectCardType type);
     void goToShop(Player* player);
@@ -96,6 +101,11 @@ signals:
     void promptShopEntrance(Player* player);
     void promptUseCard(Player* player, EffectCardType type);
     void promptUniversalDice(Player* player);
+
+    // 虚函数卡相关信号
+    void promptVirtualFuncBuy(Player* player, int tileIndex, int basePrice, int derivedPrice);
+    void promptVirtualFuncRent(Player* player, int tileIndex, int baseRent, int derivedRent);
+    void promptVirtualFuncBuild(Player* player, int tileIndex, int baseCost, int derivedCost);
 
 private slots:
     void onDiceRolled(int die1, int die2);

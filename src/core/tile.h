@@ -73,7 +73,7 @@ public:
     // 重置（用于新游戏）
     void reset();
 
-private:
+protected:
     Player* m_owner = nullptr;
     int m_houses = 0;
     bool m_hasHotel = false;
@@ -85,44 +85,39 @@ private:
 
 
 //==================== 静态成员变量格 ====================
-class StaticvalTile:public Tile{
-    explicit PropertyTile(const TileDef& def, int index);   
+class StaticvalTile : public PropertyTile {
+public:
+    explicit StaticvalTile(const TileDef& def, int index);
     void landOn(Player* player, Game* game) override;
 
-    // 地产特有属性
-    Player* owner() const { return m_owner; }
-    void setOwner(Player* p) { m_owner = p; }
-    int houses() const { return m_houses; }
-    bool hasHotel() const { return m_hasHotel; }
-    int houseCost() const { return m_houseCost; }
-    int mortgageValue() const { return m_price / 2; }
-
-    // 建造/升级
-    bool canBuildHouse(const Player* player) const;
-    void buildHouse();
-    void removeHouses(int count = 1);
-
-    // 计算当前租金（根据房屋数和同色组是否成套）
-    int calculateRent(int diceValue = 0) const;
-    // 判断同色组是否全部被同一玩家拥有
+    int calculateRent(int diceValue = 0) const override;
     bool ownsFullGroup() const;
-}
+};
 
 
 //==================== 虚函数格 ====================
-class VirtualfuncTile:public PropertyTile{
-    explicit PropertyTile(const TileDef& def, int index);
+class VirtualfuncTile : public PropertyTile {
+public:
+    explicit VirtualfuncTile(const TileDef& def, int index);
     void landOn(Player* player, Game* game) override;
 
-    int ratio;//人资产的比例
-    int buy_ratio;//购入价的比例
-    int rent_ratio;//收租的比例
-    int buy_decay;//买入的价格减少
-    int rent_decay;//收租的价格减少
+    int price() const override;
+    int calculateRent(int diceValue = 0) const override;
+    void buildHouse() override;
 
-    virtual void buildHouse();
-    virtual int calculateRent(int diceValue = 0) const;
-}
+    int buyRatio() const { return m_buyRatio; }
+    int rentRatio() const { return m_rentRatio; }
+    int ratio() const { return m_ratio; }
+    int buyDecay() const { return m_buyDecay; }
+    int rentDecay() const { return m_rentDecay; }
+
+private:
+    int m_ratio;      // 收租时基于owner资产的比例
+    int m_buyRatio;   // 购入价格比例（百分比）
+    int m_rentRatio;  // 收租比例（百分比）
+    int m_buyDecay;   // 买入价格减免
+    int m_rentDecay;  // 收租减免
+};
 
 // ==================== 问答格 ====================
 class QATile : public Tile {
