@@ -228,7 +228,7 @@ void MainWindow::onRules() {
         "  • 万能骰子 — 自选骰子点数(1-6)\n"
         "  • 虚函数卡 — 占位（待实现）\n"
         "  • 跳过卡 — 跳过当前地块的负面效果\n\n"
-        "地产颜色组（同色成套后可建房）：\n"
+        "地产颜色组（成套仅影响租金加成）：\n"
         "  棕色(2块) → 浅蓝(3块) → 粉色(3块) → 橙色(3块)\n"
         "  → 红色(3块) → 黄色 → 绿色 → 深蓝(2块)";
     QMessageBox::information(this, "游戏规则", rules);
@@ -454,7 +454,7 @@ void MainWindow::onPromptBuildHouse(int tileIndex, Player* player) {
     auto* pt = dynamic_cast<PropertyTile*>(m_game->board().tileAt(tileIndex));
     if (!pt) return;
 
-    if (!pt->canBuildHouse()) {
+    if (!pt->canBuildHouse(player)) {
         m_game->skipAction();
         return;
     }

@@ -283,7 +283,7 @@ void Game::buyProperty(Player* player, int tileIndex) {
 void Game::buildHouse(Player* player, int tileIndex) {
     auto* pt = dynamic_cast<PropertyTile*>(m_board->tileAt(tileIndex));
     if (!pt || pt->owner() != player) return;
-    if (!pt->canBuildHouse()) return;
+    if (!pt->canBuildHouse(player)) return;
     if (!player->canAfford(pt->houseCost())) {
         logEvent(player->name() + " 钱不够，无法建房！");
         m_waitingForDecision = false;

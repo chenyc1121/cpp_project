@@ -62,7 +62,7 @@ void PropertyTile::landOn(Player* player, Game* game) {
     if (m_owner == nullptr) {
         emit game->promptBuyProperty(m_index, player);
     } else if (m_owner == player) {
-        if (canBuildHouse()) {
+        if (canBuildHouse(player)) {
             emit game->promptBuildHouse(m_index, player);
         }
     } else if (!m_owner->isBankrupt()) {
@@ -93,10 +93,11 @@ bool PropertyTile::ownsFullGroup() const {
     return m_owner->ownsFullGroup(m_group);
 }
 
-bool PropertyTile::canBuildHouse() const {
+bool PropertyTile::canBuildHouse(const Player* player) const {
     if (m_hasHotel) return false;
     if (m_owner == nullptr) return false;
-    return m_owner->ownsFullGroup(m_group);
+    if (player == nullptr || m_owner != player) return false;
+    return true;
 }
 
 void PropertyTile::buildHouse() {

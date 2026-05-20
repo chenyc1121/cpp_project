@@ -63,7 +63,7 @@ public:
     int mortgageValue() const { return m_price / 2; }
 
     // 建造/升级
-    bool canBuildHouse() const;
+    bool canBuildHouse(const Player* player) const;
     void buildHouse();
     void removeHouses(int count = 1);
 
@@ -85,6 +85,30 @@ private:
     int m_rentTable[6];
 };
 
+
+//==================== 静态成员变量格 ====================
+class StaticvalTile:public Tile{
+    explicit PropertyTile(const TileDef& def, int index);   
+    void landOn(Player* player, Game* game) override;
+
+    // 地产特有属性
+    Player* owner() const { return m_owner; }
+    void setOwner(Player* p) { m_owner = p; }
+    int houses() const { return m_houses; }
+    bool hasHotel() const { return m_hasHotel; }
+    int houseCost() const { return m_houseCost; }
+    int mortgageValue() const { return m_price / 2; }
+
+    // 建造/升级
+    bool canBuildHouse(const Player* player) const;
+    void buildHouse();
+    void removeHouses(int count = 1);
+
+    // 计算当前租金（根据房屋数和同色组是否成套）
+    int calculateRent(int diceValue = 0) const;
+    // 判断同色组是否全部被同一玩家拥有
+    bool ownsFullGroup() const;
+}
 
 // ==================== 问答格 ====================
 class QATile : public Tile {
