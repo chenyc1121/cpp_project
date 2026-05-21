@@ -34,6 +34,9 @@ private slots:
     void onPromptShop(Player* player);
     void onPromptShopEntrance(Player* player);
 
+    // 迭代器卡
+    void onPromptIteratorCard(Player* player, int tileIndex);
+
     // 效果卡
     void onPromptUseCard(Player* player, EffectCardType type);
     void onPromptUniversalDice(Player* player);

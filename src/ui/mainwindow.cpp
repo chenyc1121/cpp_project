@@ -156,6 +156,10 @@ void MainWindow::connectSignals() {
     connect(m_game, &Game::promptUniversalDice,
             this, &MainWindow::onPromptUniversalDice);
 
+    // 迭代器卡
+    connect(m_game, &Game::promptIteratorCard,
+            this, &MainWindow::onPromptIteratorCard);
+
     // 虚函数卡
     connect(m_game, &Game::promptVirtualFuncBuy,
             this, &MainWindow::onPromptVirtualFuncBuy);
@@ -234,8 +238,9 @@ void MainWindow::onRules() {
         "效果卡类型：\n"
         "  • 再丢一次骰子 — 重掷骰子\n"
         "  • 万能骰子 — 自选骰子点数(1-6)\n"
-        "  • 虚函数卡 — 占位（待实现）\n"
-        "  • 跳过卡 — 跳过当前地块的负面效果\n\n"
+        "  • 虚函数卡 — 在虚函数格上选择基类/派生类行为\n"
+        "  • 跳过卡 — 跳过当前地块的负面效果\n"
+        "  • 迭代器卡 — 在迭代器格之间传送（++/--/+=2/-=2）\n\n"
         "地产颜色组（成套仅影响租金加成）：\n"
         "  棕色(2块) → 浅蓝(3块) → 粉色(3块) → 橙色(3块)\n"
         "  → 红色(3块) → 黄色 → 绿色 → 深蓝(2块)";
@@ -368,14 +373,29 @@ void MainWindow::updatePropertyDisplay() {
                     chipsRow->addWidget(chip);
                 }
             }
+            if (auto* it = dynamic_cast<IteratorTile*>(t)) {
+                if (it->owner() == player) {
+                    hasItems = true;
+                    auto* chip = new QLabel("迭代器:" + it->name(), playerGroup);
+                    chip->setStyleSheet(
+                        "background-color: #00897B; color: white; border-radius: 3px; "
+                        "padding: 1px 6px; font-size: 10px;");
+                    chipsRow->addWidget(chip);
+                }
+            }
         }
 
         for (const auto& card : player->effectCards()) {
             hasItems = true;
+            QColor cardColor = QColor("#E65100");  // default orange
+            if (card.type == EffectCardType::ITERATOR_CARD) {
+                cardColor = QColor("#00695C");  // teal for iterator cards
+            }
             auto* chip = new QLabel(card.name, playerGroup);
             chip->setStyleSheet(
-                "background-color: #E65100; color: white; border-radius: 3px; "
-                "padding: 1px 6px; font-size: 10px;");
+                QString("background-color: %1; color: white; border-radius: 3px; "
+                        "padding: 1px 6px; font-size: 10px;")
+                .arg(cardColor.name()));
             chipsRow->addWidget(chip);
         }
 
@@ -461,6 +481,11 @@ void MainWindow::onPromptBuyProperty(int tileIndex, Player* player) {
         price = rt->price();
         msg = player->name() + "，是否购买 " + t->name()
               + "？\n价格：¥" + QString::number(price);
+    } else if (auto* it = dynamic_cast<IteratorTile*>(t)) {
+        price = it->price();
+        msg = player->name() + "，是否购买 " + t->name()
+              + "（迭代器格）？\n价格：¥" + QString::number(price)
+              + "\n当前资金：¥" + QString::number(player->money());
     }
 
     if (player->money() < price) {
@@ -594,16 +619,19 @@ void MainWindow::onPromptShop(Player* player) {
 
     QStringList items;
     QVector<EffectCardType> types;
+    QVector<EffectCard> displayCards;  // store display cards for reuse
 
     EffectCardType allTypes[] = {
         EffectCardType::ROLL_AGAIN,
         EffectCardType::UNIVERSAL_DICE,
         EffectCardType::VIRTUAL_FUNCTION,
-        EffectCardType::SKIP_EFFECT
+        EffectCardType::SKIP_EFFECT,
+        EffectCardType::ITERATOR_CARD
     };
 
     for (auto type : allTypes) {
         EffectCard card = createEffectCard(type);
+        displayCards.append(card);
         types.append(type);
         if (player->canAfford(card.price)) {
             items << card.name + " (¥" + QString::number(card.price) + ")";
@@ -621,10 +649,9 @@ void MainWindow::onPromptShop(Player* player) {
     if (ok) {
         int idx = items.indexOf(choice);
         if (idx >= 0 && idx < types.size()) {
-            EffectCardType selectedType = types[idx];
-            EffectCard card = createEffectCard(selectedType);
-            if (player->canAfford(card.price)) {
-                m_game->buyEffectCard(player, selectedType);
+            const EffectCard& selectedCard = displayCards[idx];
+            if (player->canAfford(selectedCard.price)) {
+                m_game->buyEffectCard(player, selectedCard);
             } else {
                 m_game->logEvent(player->name() + " 资金不足，无法购买！");
             }
@@ -814,6 +841,80 @@ void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
     } else {
         m_game->skipAction();
     }
+}
+
+
+// ==================== 迭代器卡 ====================
+void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
+    if (!m_game || !player) return;
+
+    // 收集玩家拥有的迭代器卡
+    QVector<int> cardIndices;
+    for (int i = 0; i < player->effectCards().size(); ++i) {
+        if (player->effectCards()[i].type == EffectCardType::ITERATOR_CARD) {
+            cardIndices.append(i);
+        }
+    }
+
+    if (cardIndices.isEmpty()) {
+        // 没有迭代器卡，回退到正常流程
+        m_game->declineIteratorCard();
+        return;
+    }
+
+    // 构建卡片选择列表
+    QStringList cardNames;
+    for (int idx : cardIndices) {
+        const EffectCard& card = player->effectCards()[idx];
+        QString ops;
+        IteratorSubtype sub = card.iterSubtype;
+        if (iteratorSubtypeSupports(sub, IteratorOp::INCREMENT)) ops += "++ ";
+        if (iteratorSubtypeSupports(sub, IteratorOp::DECREMENT)) ops += "-- ";
+        if (iteratorSubtypeSupports(sub, IteratorOp::PLUS_EQ_2)) ops += "+=2 ";
+        if (iteratorSubtypeSupports(sub, IteratorOp::MINUS_EQ_2)) ops += "-=2";
+        cardNames << card.name + " [支持: " + ops.trimmed() + "]";
+    }
+
+    bool ok;
+    QString cardChoice = QInputDialog::getItem(this,
+        "迭代器卡 — " + player->name(),
+        player->name() + "，选择要使用的迭代器卡：\n（选择取消则不使用）",
+        cardNames, 0, false, &ok);
+
+    if (!ok) {
+        m_game->declineIteratorCard();
+        return;
+    }
+
+    int cardIdx = cardIndices[cardNames.indexOf(cardChoice)];
+    IteratorSubtype sub = player->effectCards()[cardIdx].iterSubtype;
+    QString subName = iteratorSubtypeName(sub);
+
+    // 选择操作
+    QStringList ops;
+    ops << "++ (前进1格)" << "-- (后退1格)" << "+=2 (前进2格)" << "-=2 (后退2格)";
+
+    QString opChoice = QInputDialog::getItem(this,
+        "迭代器操作 — " + player->name(),
+        player->name() + " 使用 " + subName + "\n请选择操作（选择不支持的将被消耗且无效）：",
+        ops, 0, false, &ok);
+
+    if (!ok) {
+        m_game->declineIteratorCard();
+        return;
+    }
+
+    IteratorOp op;
+    int opIdx = ops.indexOf(opChoice);
+    switch (opIdx) {
+    case 0: op = IteratorOp::INCREMENT; break;
+    case 1: op = IteratorOp::DECREMENT; break;
+    case 2: op = IteratorOp::PLUS_EQ_2; break;
+    case 3: op = IteratorOp::MINUS_EQ_2; break;
+    default: op = IteratorOp::INCREMENT; break;
+    }
+
+    m_game->useIteratorCard(player, tileIndex, sub, op);
 }
 
 

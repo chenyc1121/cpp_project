@@ -24,6 +24,10 @@ public:
     QVector<class PropertyTile*> allProperties() const;
     // 获取所有铁路地块
     QVector<class RailroadTile*> allRailroads() const;
+    // 获取所有迭代器格
+    QVector<class IteratorTile*> allIterators() const;
+    // 获取迭代器格索引列表（有序，顺时针方向）
+    QVector<int> iteratorIndices() const;
 
     // 重置棋盘到初始状态
     void reset();

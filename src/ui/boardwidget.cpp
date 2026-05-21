@@ -183,6 +183,9 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
     case TileType::TAX:
         bg = QColor("#EF9A9A");
         break;
+    case TileType::ITERATOR:
+        bg = QColor("#80CBC4");
+        break;
     default:
         break;
     }
@@ -254,24 +257,28 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
     } else if (tile->type() == TileType::SHOP_ENTRANCE) {
         painter.setPen(QColor("#BF360C"));
         painter.drawText(rect, Qt::AlignCenter, ">>");
+    } else if (tile->type() == TileType::ITERATOR) {
+        painter.setPen(QColor("#00695C"));
+        painter.drawText(rect, Qt::AlignCenter, "<>");
     }
 
     // 价格
     auto* pt = dynamic_cast<PropertyTile*>(tile);
     auto* ut = dynamic_cast<UtilityTile*>(tile);
     auto* rt = dynamic_cast<RailroadTile*>(tile);
+    auto* it_tile = dynamic_cast<IteratorTile*>(tile);
 
-    if (pt || ut || rt) {
+    if (pt || ut || rt || it_tile) {
         int priceFontSz = qBound(4, static_cast<int>(7 * s), 10);
         QFont priceFont("Arial", priceFontSz);
         painter.setFont(priceFont);
-        int price = pt ? pt->price() : (ut ? ut->price() : (rt ? rt->price() : 0));
+        int price = pt ? pt->price() : (ut ? ut->price() : (rt ? rt->price() : (it_tile ? it_tile->price() : 0)));
 
-        Player* owner = pt ? pt->owner() : (ut ? ut->owner() : (rt ? rt->owner() : nullptr));
+        Player* owner = pt ? pt->owner() : (ut ? ut->owner() : (rt ? rt->owner() : (it_tile ? it_tile->owner() : nullptr)));
 
         if (owner) {
             painter.setPen(owner->color().darker(150));
-            int rent = pt ? pt->calculateRent() : 0;
+            int rent = pt ? pt->calculateRent() : (it_tile ? it_tile->calculateRent() : 0);
             painter.drawText(rect.adjusted(1, 0, -1, -2),
                              Qt::AlignBottom | Qt::AlignHCenter,
                              "¥" + QString::number(rent > 0 ? rent : price));
@@ -410,6 +417,12 @@ void BoardWidget::mousePressEvent(QMouseEvent* event) {
             info += "\n价格: ¥" + QString::number(rt->price());
             if (rt->owner())
                 info += "\n所有者: " + rt->owner()->name();
+        } else if (auto* it_tile = dynamic_cast<IteratorTile*>(t)) {
+            info += "\n类型: 迭代器格";
+            info += "\n价格: ¥" + QString::number(it_tile->price());
+            if (it_tile->owner())
+                info += "\n所有者: " + it_tile->owner()->name();
+            info += "\n\n拥有迭代器卡时可在此格选择操作传送至其他迭代器格。";
         } else if (t->type() == TileType::QA) {
             info += "\n类型: 问答格";
             info += "\n回答C++选择题，答对有概率获得效果卡！";

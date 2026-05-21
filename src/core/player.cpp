@@ -86,6 +86,16 @@ bool Player::useEffectCard(EffectCardType type) {
     return false;
 }
 
+bool Player::useEffectCardBySubtype(EffectCardType type, IteratorSubtype sub) {
+    for (int i = 0; i < m_effectCards.size(); ++i) {
+        if (m_effectCards[i].type == type && m_effectCards[i].iterSubtype == sub) {
+            m_effectCards.removeAt(i);
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Player::hasEffectCard(EffectCardType type) const {
     for (const auto& card : m_effectCards) {
         if (card.type == type) return true;
@@ -103,6 +113,20 @@ void Player::addProperty(PropertyTile* tile) {
 
 void Player::removeProperty(PropertyTile* tile) {
     m_properties.removeAll(tile);
+}
+
+int Player::iteratorTileCount() const {
+    return m_iteratorTiles.size();
+}
+
+void Player::addIteratorTile(IteratorTile* tile) {
+    if (!m_iteratorTiles.contains(tile)) {
+        m_iteratorTiles.append(tile);
+    }
+}
+
+void Player::removeIteratorTile(IteratorTile* tile) {
+    m_iteratorTiles.removeAll(tile);
 }
 
 int Player::railroadCount() const {
@@ -154,6 +178,10 @@ void Player::liquidate(Game* game) {
         tile->reset();
     }
     m_properties.clear();
+    for (auto* it : m_iteratorTiles) {
+        it->setOwner(nullptr);
+    }
+    m_iteratorTiles.clear();
     m_effectCards.clear();
     m_money = 0;
     m_skipNextTurn = false;
@@ -167,5 +195,6 @@ void Player::reset() {
     m_bankrupt = false;
     m_skipNextTurn = false;
     m_effectCards.clear();
+    m_iteratorTiles.clear();
     m_properties.clear();
 }

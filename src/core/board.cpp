@@ -45,6 +45,26 @@ QVector<RailroadTile*> Board::allRailroads() const {
     return rails;
 }
 
+QVector<IteratorTile*> Board::allIterators() const {
+    QVector<IteratorTile*> iters;
+    for (auto* t : m_tiles) {
+        if (t->type() == TileType::ITERATOR) {
+            iters.append(static_cast<IteratorTile*>(t));
+        }
+    }
+    return iters;
+}
+
+QVector<int> Board::iteratorIndices() const {
+    QVector<int> indices;
+    for (auto* t : m_tiles) {
+        if (t->type() == TileType::ITERATOR) {
+            indices.append(t->index());
+        }
+    }
+    return indices;
+}
+
 void Board::reset() {
     for (auto* t : m_tiles) {
         if (auto* pt = dynamic_cast<PropertyTile*>(t)) {
@@ -55,6 +75,9 @@ void Board::reset() {
         }
         if (auto* rt = dynamic_cast<RailroadTile*>(t)) {
             rt->setOwner(nullptr);
+        }
+        if (auto* it = dynamic_cast<IteratorTile*>(t)) {
+            it->setOwner(nullptr);
         }
     }
     emit boardChanged();

@@ -17,6 +17,7 @@ Tile* createTile(const TileDef& def, int index) {
     case TileType::RAILROAD:      return new RailroadTile(def, index);
     case TileType::STATICVAL:     return new StaticvalTile(def, index);
     case TileType::VIRTUALFUNC:   return new VirtualfuncTile(def, index);
+    case TileType::ITERATOR:      return new IteratorTile(def, index);
     }
     return nullptr;
 }
@@ -258,6 +259,31 @@ ShopEntranceTile::ShopEntranceTile(const TileDef& def, int index)
 void ShopEntranceTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 经过商店入口");
     emit game->promptShopEntrance(player);
+}
+
+
+// ==================== 迭代器格 ====================
+IteratorTile::IteratorTile(const TileDef& def, int index)
+    : Tile(def, index), m_baseRent(def.baseRent)
+{
+}
+
+void IteratorTile::landOn(Player* player, Game* game) {
+    if (m_owner == nullptr) {
+        emit game->promptBuyProperty(m_index, player);
+    } else if (m_owner != player && !m_owner->isBankrupt()) {
+        int rent = calculateRent();
+        game->logEvent(player->name() + " 到达迭代器格" + m_name
+                       + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元");
+        player->payMoneyTo(rent, m_owner, game);
+    }
+}
+
+int IteratorTile::calculateRent() const {
+    if (m_owner == nullptr) return 0;
+    int count = m_owner->iteratorTileCount();
+    if (count <= 0) return m_baseRent;
+    return m_baseRent * (1 << (count - 1));
 }
 
 

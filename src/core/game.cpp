@@ -14,6 +14,7 @@ Game::Game(QObject* parent)
       m_dice(new Dice(this))
 {
     connect(m_dice, &Dice::diceRolled, this, &Game::onDiceRolled);
+    m_iteratorIndices = m_board->iteratorIndices();
 }
 
 Game::~Game() {
@@ -185,6 +186,12 @@ void Game::handleLanding() {
             canSkip = true;
         break;
     }
+    case TileType::ITERATOR: {
+        auto* it = dynamic_cast<IteratorTile*>(tile);
+        if (it && it->owner() && it->owner() != player && !it->owner()->isBankrupt())
+            canSkip = true;
+        break;
+    }
     default:
         break;
     }
@@ -277,6 +284,21 @@ void Game::buyProperty(Player* player, int tileIndex) {
         rt->setOwner(player);
         logEvent(player->name() + QString(" 购买了 %1，花费 %2 元")
                   .arg(rt->name()).arg(rt->price()));
+        emit playerUpdated(player);
+        emit boardUpdated();
+    } else if (auto* it = dynamic_cast<IteratorTile*>(t)) {
+        if (it->owner() != nullptr) return;
+        if (!player->canAfford(it->price())) {
+            logEvent(player->name() + " 钱不够，无法购买！");
+            m_waitingForDecision = false;
+            endTurn();
+            return;
+        }
+        player->payMoney(it->price(), this);
+        it->setOwner(player);
+        player->addIteratorTile(it);
+        logEvent(player->name() + QString(" 购买了 %1，花费 %2 元")
+                  .arg(it->name()).arg(it->price()));
         emit playerUpdated(player);
         emit boardUpdated();
     }
@@ -434,19 +456,23 @@ int Game::getCardPrice(EffectCardType type) const {
     case EffectCardType::UNIVERSAL_DICE:   return CARD_PRICE_UNIVERSAL_DICE;
     case EffectCardType::VIRTUAL_FUNCTION: return CARD_PRICE_VIRTUAL_FUNCTION;
     case EffectCardType::SKIP_EFFECT:      return CARD_PRICE_SKIP_EFFECT;
+    case EffectCardType::ITERATOR_CARD:     return CARD_PRICE_ITERATOR;
     }
     return 0;
 }
 
 void Game::buyEffectCard(Player* player, EffectCardType type) {
-    int price = getCardPrice(type);
-    if (!player->canAfford(price)) {
+    EffectCard card = createEffectCard(type);
+    buyEffectCard(player, card);
+}
+
+void Game::buyEffectCard(Player* player, const EffectCard& card) {
+    if (!player->canAfford(card.price)) {
         logEvent(player->name() + " 资金不足，无法购买！");
         return;
     }
-    player->payMoney(price, this);
-    player->addEffectCard(type);
-    EffectCard card = createEffectCard(type);
+    player->payMoney(card.price, this);
+    player->addEffectCard(card);
     logEvent(player->name() + " 购买了 " + card.name + "！");
     emit playerUpdated(player);
 }
@@ -563,6 +589,94 @@ void Game::payRentVirtualFunc(Player* player, int tileIndex, bool useDerived) {
     endTurn();
 }
 
+
+// ==================== 迭代器卡 ====================
+int Game::computeIteratorTarget(int fromIndex, IteratorOp op) const {
+    int pos = m_iteratorIndices.indexOf(fromIndex);
+    if (pos < 0) return -1;
+    int n = m_iteratorIndices.size();
+    int targetPos;
+    switch (op) {
+    case IteratorOp::INCREMENT:  targetPos = (pos + 1) % n; break;
+    case IteratorOp::DECREMENT:  targetPos = (pos - 1 + n) % n; break;
+    case IteratorOp::PLUS_EQ_2:  targetPos = (pos + 2) % n; break;
+    case IteratorOp::MINUS_EQ_2: targetPos = (pos - 2 + n) % n; break;
+    default: return -1;
+    }
+    return m_iteratorIndices[targetPos];
+}
+
+void Game::useIteratorCard(Player* player, int fromTileIndex,
+                           IteratorSubtype sub, IteratorOp op) {
+    // 消耗一张匹配子类型的迭代器卡
+    bool cardUsed = player->useEffectCardBySubtype(EffectCardType::ITERATOR_CARD, sub);
+
+    if (!cardUsed) {
+        // 没有匹配的卡，不应该发生
+        m_waitingForDecision = false;
+        endTurn();
+        return;
+    }
+
+    QString subName = iteratorSubtypeName(sub);
+    QString opName = iteratorOpName(op);
+
+    if (!iteratorSubtypeSupports(sub, op)) {
+        // 不支持的操作：卡片已消耗，但没有效果
+        logEvent(player->name() + QString(" 使用了迭代器卡(%1)的 %2 操作，但此操作不被支持！卡片被消耗，无效果。")
+                 .arg(subName).arg(opName));
+        m_waitingForDecision = false;
+        endTurn();
+        return;
+    }
+
+    int target = computeIteratorTarget(fromTileIndex, op);
+    if (target < 0) {
+        logEvent(player->name() + " 迭代器卡使用失败：无法找到目标迭代器格！");
+        m_waitingForDecision = false;
+        endTurn();
+        return;
+    }
+
+    Tile* targetTile = m_board->tileAt(target);
+    logEvent(player->name() + QString(" 使用迭代器卡(%1) %2 → 传送到 %3！")
+             .arg(subName).arg(opName).arg(targetTile ? targetTile->name() : "?"));
+
+    player->setPosition(target);
+    emit playerMoved(player, fromTileIndex, target);
+    emit playerUpdated(player);
+    emit boardUpdated();
+
+    m_waitingForDecision = false;
+    endTurn();
+}
+
+void Game::declineIteratorCard() {
+    Player* player = currentPlayer();
+    Tile* tile = m_board->tileAt(player->position());
+    if (!tile) {
+        m_waitingForDecision = false;
+        endTurn();
+        return;
+    }
+
+    // 继续正常的landOn逻辑（购买或付租）
+    if (auto* it = dynamic_cast<IteratorTile*>(tile)) {
+        if (it->owner() == nullptr) {
+            emit promptBuyProperty(it->index(), player);
+            m_waitingForDecision = true;
+            return;
+        } else if (it->owner() != player && !it->owner()->isBankrupt()) {
+            int rent = it->calculateRent();
+            logEvent(player->name() + " 到达迭代器格" + it->name()
+                     + "（属于" + it->owner()->name() + "），支付租金 " + QString::number(rent) + " 元");
+            player->payMoneyTo(rent, it->owner(), this);
+        }
+    }
+
+    m_waitingForDecision = false;
+    endTurn();
+}
 
 // ==================== 事件日志 ====================
 void Game::logEvent(const QString& message) {

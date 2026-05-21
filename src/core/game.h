@@ -7,6 +7,7 @@
 #include "config.h"
 #include "effectcard.h"
 #include "questionbank.h"
+#include <QVector>
 
 class Player;
 class Tile;
@@ -71,8 +72,14 @@ public:
     void buildHouseVirtualFunc(Player* player, int tileIndex, bool useDerived);
     void payRentVirtualFunc(Player* player, int tileIndex, bool useDerived);
 
+    // === 迭代器卡 ===
+    void useIteratorCard(Player* player, int fromTileIndex,
+                         IteratorSubtype sub, IteratorOp op);
+    void declineIteratorCard();
+
     // === 商店 ===
     void buyEffectCard(Player* player, EffectCardType type);
+    void buyEffectCard(Player* player, const EffectCard& card);
     void goToShop(Player* player);
     void declineShopEntrance();
 
@@ -102,6 +109,9 @@ signals:
     void promptUseCard(Player* player, EffectCardType type);
     void promptUniversalDice(Player* player);
 
+    // 迭代器卡相关信号
+    void promptIteratorCard(Player* player, int tileIndex);
+
     // 虚函数卡相关信号
     void promptVirtualFuncBuy(Player* player, int tileIndex, int basePrice, int derivedPrice);
     void promptVirtualFuncRent(Player* player, int tileIndex, int baseRent, int derivedRent);
@@ -115,6 +125,8 @@ private:
     bool checkGameOver();
     void proceedAfterCardDecision();
     int getCardPrice(EffectCardType type) const;
+    int computeIteratorTarget(int fromIndex, IteratorOp op) const;
+    QVector<int> m_iteratorIndices;  // 缓存迭代器格索引（有序）
 
     Board* m_board;
     Dice* m_dice;

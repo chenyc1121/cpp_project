@@ -8,6 +8,7 @@
 #include "effectcard.h"
 
 class PropertyTile;
+class IteratorTile;
 class Game;
 
 // ==================== 玩家类 ====================
@@ -44,6 +45,7 @@ public:
     void addEffectCard(const EffectCard& card);
     void addEffectCard(EffectCardType type);
     bool useEffectCard(EffectCardType type);
+    bool useEffectCardBySubtype(EffectCardType type, IteratorSubtype sub);
     bool hasEffectCard(EffectCardType type) const;
 
     // === 地产管理 ===
@@ -54,6 +56,9 @@ public:
 
     int railroadCount() const;
     int utilityCount() const;
+    int iteratorTileCount() const;
+    void addIteratorTile(IteratorTile* tile);
+    void removeIteratorTile(IteratorTile* tile);
     bool ownsFullGroup(ColorGroup group) const;
     QVector<PropertyTile*> propertiesInGroup(ColorGroup group) const;
 
@@ -74,6 +79,7 @@ private:
     bool m_skipNextTurn = false;
     QVector<EffectCard> m_effectCards;
     QVector<PropertyTile*> m_properties;
+    QVector<IteratorTile*> m_iteratorTiles;
 };
 
 #endif // PLAYER_H

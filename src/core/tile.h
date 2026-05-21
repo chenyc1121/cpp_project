@@ -159,6 +159,23 @@ public:
 };
 
 
+// ==================== 迭代器格 ====================
+class IteratorTile : public Tile {
+public:
+    explicit IteratorTile(const TileDef& def, int index);
+    void landOn(Player* player, Game* game) override;
+
+    Player* owner() const { return m_owner; }
+    void setOwner(Player* p) { m_owner = p; }
+    int calculateRent() const;
+    int baseRent() const { return m_baseRent; }
+
+private:
+    Player* m_owner = nullptr;
+    int m_baseRent;
+};
+
+
 // ==================== 公共设施（水厂/电厂） ====================
 class UtilityTile : public Tile {
 public:
