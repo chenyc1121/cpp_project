@@ -107,7 +107,7 @@ void PlayerPanel::highlightCurrentPlayer(Player* player) {
             if (m_players[i] == player && !player->isBankrupt()) {
                 row.container->setStyleSheet(
                     "QFrame { border: 3px solid #FFD700; border-radius: 6px; "
-                    "padding: 4px; margin: 2px;}");
+                    "padding: 4px; margin: 2px; background-color: #FFFDE7; }");
             } else if (!m_players[i]->isBankrupt()) {
                 row.container->setStyleSheet(
                     "QFrame { border: 2px solid #ccc; border-radius: 6px; "

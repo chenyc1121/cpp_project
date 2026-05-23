@@ -226,7 +226,7 @@ TaxTile::TaxTile(const TileDef& def, int index)
     : Tile(def, index) {}
 
 void TaxTile::landOn(Player* player, Game* game) {
-    game->logEvent(player->name() + " 花掉了" + QString::number(m_price) + " 元，吃成了大卫戴！");
+    game->logEvent(player->name() + " 需要缴纳" + m_name + " " + QString::number(m_price) + " 元");
     player->payMoney(m_price, game);
 }
 
