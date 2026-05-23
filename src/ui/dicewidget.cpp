@@ -24,7 +24,7 @@ DiceWidget::DiceWidget(QWidget* parent)
     m_die1Label->setAlignment(Qt::AlignCenter);
     m_die1Label->setFixedSize(80, 80);
     m_die1Label->setStyleSheet(
-        "background-color: white; border: 3px solid #333; border-radius: 10px;");
+        "background-color: #000000; border: 3px solid #333; border-radius: 10px;");
     diceLayout->addWidget(m_die1Label);
 
     m_die2Label = new QLabel("?", this);
@@ -32,7 +32,7 @@ DiceWidget::DiceWidget(QWidget* parent)
     m_die2Label->setAlignment(Qt::AlignCenter);
     m_die2Label->setFixedSize(80, 80);
     m_die2Label->setStyleSheet(
-        "background-color: white; border: 3px solid #333; border-radius: 10px;");
+        "background-color: #000000; border: 3px solid #333; border-radius: 10px;");
     diceLayout->addWidget(m_die2Label);
 
     groupLayout->addLayout(diceLayout);
@@ -49,9 +49,9 @@ DiceWidget::DiceWidget(QWidget* parent)
     m_rollBtn->setMinimumHeight(40);
     m_rollBtn->setEnabled(false);
     m_rollBtn->setStyleSheet(
-        "QPushButton { background-color: #4CAF50; color: white; font-size: 16px; "
+        "QPushButton { background-color: #8F1A10; color: white; font-size: 16px; "
         "border-radius: 8px; padding: 8px; }"
-        "QPushButton:hover { background-color: #45a049; }"
+        "QPushButton:hover { background-color: #E6C8C8; }"
         "QPushButton:disabled { background-color: #cccccc; }");
     groupLayout->addWidget(m_rollBtn);
 
