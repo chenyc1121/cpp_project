@@ -20,6 +20,8 @@
 #include <QFormLayout>
 #include <QSpinBox>
 #include <QDialogButtonBox>
+#include <QButtonGroup>
+#include <QRadioButton>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
@@ -64,7 +66,7 @@ void MainWindow::setupUI() {
     m_statusLabel->setAlignment(Qt::AlignCenter);
     m_statusLabel->setStyleSheet(
         "QLabel { background-color: #FFF9C4; border: 2px solid #F9A825; "
-        "border-radius: 6px; padding: 8px; font-size: 14px; font-weight: bold; }");
+        "border-radius: 6px; padding: 8px; font-size: 14px; font-weight: bold; color:#000000;}");
     m_statusLabel->setWordWrap(true);
     rightLayout->addWidget(m_statusLabel);
 
@@ -83,8 +85,8 @@ void MainWindow::setupUI() {
     m_propertyArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_propertyArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_propertyArea->setStyleSheet(
-        "QScrollArea { border: 2px solid #388E3C; border-radius: 6px; "
-        "background-color: #E8F5E9; }");
+        "QScrollArea { border: 2px solid #8E3838; border-radius: 6px; "
+        "background-color: #F5E8E8; }");
 
     m_propertyContent->setStyleSheet("background: transparent;");
     auto* propLayout = new QHBoxLayout(m_propertyContent);
@@ -306,7 +308,7 @@ void MainWindow::updatePropertyDisplay() {
         headerRow->addWidget(colorDot);
 
         auto* nameLabel = new QLabel(player->name(), playerGroup);
-        nameLabel->setStyleSheet("font-weight: bold; font-size: 12px;");
+        nameLabel->setStyleSheet("font-weight: bold; font-size: 12px;color: #000000");
         headerRow->addWidget(nameLabel);
 
         if (player->isBankrupt()) {
@@ -424,8 +426,8 @@ void MainWindow::onTurnStarted(Player* player) {
     if (!player) return;
     m_statusLabel->setText("当前回合：" + player->name());
     m_statusLabel->setStyleSheet(
-        "QLabel { background-color: #C8E6C9; border: 2px solid #388E3C; "
-        "border-radius: 6px; padding: 8px; font-size: 14px; font-weight: bold; }");
+        "QLabel { background-color: #E6C8C8; border: 2px solid #8E3838; "
+        "border-radius: 6px; padding: 8px; font-size: 14px; font-weight: bold; color:#000000;}");
     m_playerPanel->highlightCurrentPlayer(player);
     m_diceWidget->setRollEnabled(true);
 }
@@ -563,25 +565,39 @@ void MainWindow::onPromptQA(Player* player, int tileIndex) {
 
     Question q = QuestionBank::drawRandom();
     m_game->setCurrentQuestion(q);
-
-    QStringList options;
-    options << "A. " + q.optionA
-            << "B. " + q.optionB
-            << "C. " + q.optionC
-            << "D. " + q.optionD;
-
-    bool ok;
-    QString choice = QInputDialog::getItem(this,
-        "问答格 - " + player->name(),
-        q.text + "\n\n" + options.join("\n"),
-        options, 0, false, &ok);
-
-    if (ok) {
-        int answerIndex = options.indexOf(choice);
-        m_game->answerQA(player, tileIndex, answerIndex);
-    } else {
-        m_game->answerQA(player, tileIndex, -1);
+    QDialog dialog(this);
+    dialog.setWindowTitle(player->name()+" 来到了问答格");
+    dialog.setMinimumWidth(350);
+    QVBoxLayout *layout=new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel(q.text));
+    QString options[4]={"A "+q.optionA,"B "+q.optionB,"C "+q.optionC,"D "+q.optionD};
+    QButtonGroup *grp=new QButtonGroup(&dialog);
+    QVector<QRadioButton*> radioButtons;
+    for(int i=0;i<4;i++){
+        QRadioButton *radio=new QRadioButton();
+        QString text=options[i];
+        radio->setText(text);
+        grp->addButton(radio,i);
+        radioButtons.append(radio);
+        layout->addWidget(radio);
     }
+    QHBoxLayout *buttonLayout=new QHBoxLayout();
+    QPushButton *answerButton=new QPushButton("确定");
+    QPushButton *cancelButton=new QPushButton("离开");
+    answerButton->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px}");
+    cancelButton->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px}");
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(answerButton);
+    buttonLayout->addWidget(cancelButton);
+    layout->addLayout(buttonLayout);
+    connect(answerButton,&QPushButton::clicked,[&](){
+        int idx=grp->checkedId();
+        m_game->answerQA(player,player->position(),idx);
+        dialog.accept();
+    });
+    connect(cancelButton,&QPushButton::clicked,&dialog,&QDialog::reject);
+    dialog.exec();
+    m_game->skipAction();
 }
 
 
@@ -591,25 +607,39 @@ void MainWindow::onPromptComputerLab(Player* player) {
 
     Question q = QuestionBank::drawRandom();
     m_game->setCurrentQuestion(q);
-
-    QStringList options;
-    options << "A. " + q.optionA
-            << "B. " + q.optionB
-            << "C. " + q.optionC
-            << "D. " + q.optionD;
-
-    bool ok;
-    QString choice = QInputDialog::getItem(this,
-        "上机课 - " + player->name(),
-        player->name() + " 进入上机课！\n停止一回合，回答一道C++题：\n\n" + q.text + "\n\n" + options.join("\n"),
-        options, 0, false, &ok);
-
-    if (ok) {
-        int answerIndex = options.indexOf(choice);
-        m_game->answerComputerLab(player, answerIndex);
-    } else {
-        m_game->answerComputerLab(player, -1);
+    QDialog dialog(this);
+    dialog.setWindowTitle(player->name()+" 前来上机");
+    dialog.setMinimumWidth(350);
+    QVBoxLayout *layout=new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel(q.text));
+    QString options[4]={"A "+q.optionA,"B "+q.optionB,"C "+q.optionC,"D "+q.optionD};
+    QButtonGroup *grp=new QButtonGroup(&dialog);
+    QVector<QRadioButton*> radioButtons;
+    for(int i=0;i<4;i++){
+        QRadioButton *radio=new QRadioButton();
+        QString text=options[i];
+        radio->setText(text);
+        grp->addButton(radio,i);
+        radioButtons.append(radio);
+        layout->addWidget(radio);
     }
+    QHBoxLayout *buttonLayout=new QHBoxLayout();
+    QPushButton *answerButton=new QPushButton("确定");
+    QPushButton *cancelButton=new QPushButton("离开");
+    answerButton->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px}");
+    cancelButton->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px}");
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(answerButton);
+    buttonLayout->addWidget(cancelButton);
+    layout->addLayout(buttonLayout);
+    connect(answerButton,&QPushButton::clicked,[&](){
+        int idx=grp->checkedId();
+        m_game->answerComputerLab(player,idx);
+        dialog.accept();
+    });
+    connect(cancelButton,&QPushButton::clicked,&dialog,&QDialog::reject);
+    dialog.exec();
+    m_game->skipAction();
 }
 
 
@@ -640,24 +670,53 @@ void MainWindow::onPromptShop(Player* player) {
         }
     }
 
-    bool ok;
-    QString choice = QInputDialog::getItem(this,
-        "商店 - " + player->name(),
-        "欢迎光临！请选择要购买的卡片：\n当前资金：¥" + QString::number(player->money()),
-        items, 0, false, &ok);
-
-    if (ok) {
-        int idx = items.indexOf(choice);
-        if (idx >= 0 && idx < types.size()) {
-            const EffectCard& selectedCard = displayCards[idx];
-            if (player->canAfford(selectedCard.price)) {
-                m_game->buyEffectCard(player, selectedCard);
-            } else {
-                m_game->logEvent(player->name() + " 资金不足，无法购买！");
+    QDialog dialog(this);
+    dialog.setWindowTitle(player->name()+" 来到了麦叔的铺子");
+    dialog.setMinimumWidth(350);
+    QVBoxLayout *layout=new QVBoxLayout(&dialog);
+    QLabel *titleLabel=new QLabel("欢迎光临！看看要买点什么呢？");
+    QLabel *moneyLabel=new QLabel("当前资金：¥"+QString::number(player->money()));
+    layout->addWidget(titleLabel);
+    layout->addWidget(moneyLabel);
+    QButtonGroup *grp=new QButtonGroup(&dialog);
+    QVector<QRadioButton*> radioButtons;
+    for(int i=0;i<displayCards.size();i++){
+        const EffectCard& card=displayCards[i];
+        QRadioButton *radio=new QRadioButton();
+        QString text=card.name+" (¥" + QString::number(card.price) + ")";
+        if(!player->canAfford(card.price)){
+            text+=" - 资金不足";
+            radio->setEnabled(false);
+            radio->setStyleSheet("color:#cccccc");
+        }
+        radio->setText(text);
+        grp->addButton(radio,i);
+        radioButtons.append(radio);
+        layout->addWidget(radio);
+    }
+    QHBoxLayout *buttonLayout=new QHBoxLayout();
+    QPushButton *buyButton=new QPushButton("购买");
+    QPushButton *cancelButton=new QPushButton("离开");
+    buyButton->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    cancelButton->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(buyButton);
+    buttonLayout->addWidget(cancelButton);
+    layout->addLayout(buttonLayout);
+    connect(buyButton,&QPushButton::clicked,[&](){
+        int idx=grp->checkedId();
+        if(idx>=0&&idx<displayCards.size()){
+            const EffectCard& selectedCard=displayCards[idx];
+            if(player->canAfford(selectedCard.price)){
+                m_game->buyEffectCard(player,selectedCard);
+                dialog.accept();
+            } else{
+                m_game->logEvent(player->name()+" 资金不足，无法购买！");
             }
         }
-    }
-
+    });
+    connect(cancelButton,&QPushButton::clicked,&dialog,&QDialog::reject);
+    dialog.exec();
     m_game->skipAction();
 }
 

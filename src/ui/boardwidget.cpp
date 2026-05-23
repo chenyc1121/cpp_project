@@ -124,24 +124,24 @@ void BoardWidget::paintEvent(QPaintEvent*) {
     int m = MARGIN;
     double s = scaleFactor();
 
-    painter.fillRect(rect(), QColor("#1B5E20"));
+    painter.fillRect(rect(), QColor("#8F1A10"));
 
     QRect boardOuter(m, m, boardPx, boardPx);
-    painter.fillRect(boardOuter, QColor("#C8E6C9"));
-    painter.setPen(QPen(QColor("#388E3C"), 2));
+    painter.fillRect(boardOuter, QColor("#E6C8C8"));
+    painter.setPen(QPen(QColor("#8E3838"), 2));
     painter.drawRect(boardOuter);
 
     QRect center(m + cell, m + cell,
                  (CELLS_PER_SIDE - 2) * cell,
                  (CELLS_PER_SIDE - 2) * cell);
-    painter.fillRect(center, QColor("#E8F5E9"));
-    painter.setPen(QPen(QColor("#A5D6A7"), 2));
+    painter.fillRect(center, QColor("#F5E8E8"));
+    painter.setPen(QPen(QColor("#D6A7A7"), 2));
     painter.drawRect(center);
 
     int titleSize = qBound(12, static_cast<int>(24 * s), 36);
     QFont titleFont("Microsoft YaHei", titleSize, QFont::Bold);
     painter.setFont(titleFont);
-    painter.setPen(QColor("#1B5E20"));
+    painter.setPen(QColor("#8F1A10"));
     painter.drawText(center, Qt::AlignHCenter | Qt::AlignVCenter, "大富翁\nMonopoly");
 
     for (int i = 0; i < BOARD_SIZE; ++i) {
@@ -283,7 +283,7 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
                              Qt::AlignBottom | Qt::AlignHCenter,
                              "¥" + QString::number(rent > 0 ? rent : price));
         } else {
-            painter.setPen(Qt::darkGreen);
+            painter.setPen(QColor(0,0,0));
             painter.drawText(rect.adjusted(1, 0, -1, -2),
                              Qt::AlignBottom | Qt::AlignHCenter,
                              "¥" + QString::number(price));
