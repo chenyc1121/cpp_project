@@ -269,6 +269,14 @@ IteratorTile::IteratorTile(const TileDef& def, int index)
 }
 
 void IteratorTile::landOn(Player* player, Game* game) {
+    // 检查迭代器卡 — 玩家可选择使用卡片传送
+    if (player->hasEffectCard(EffectCardType::ITERATOR_CARD)) {
+        game->logEvent(player->name() + " 到达迭代器格 " + m_name + "，可使用迭代器卡传送");
+        emit game->promptIteratorCard(player, m_index);
+        return;
+    }
+
+    // 无迭代器卡，正常流程
     if (m_owner == nullptr) {
         emit game->promptBuyProperty(m_index, player);
     } else if (m_owner != player && !m_owner->isBankrupt()) {

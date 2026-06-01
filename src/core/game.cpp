@@ -612,17 +612,36 @@ void Game::payRentVirtualFunc(Player* player, int tileIndex, bool useDerived) {
 
 // ==================== 迭代器卡 ====================
 int Game::computeIteratorTarget(int fromIndex, IteratorOp op) const {
+    int n = m_iteratorIndices.size();
+    if (n == 0) return -1;
     int pos = m_iteratorIndices.indexOf(fromIndex);
     if (pos < 0) return -1;
-    int n = m_iteratorIndices.size();
-    int targetPos;
+
+    // 一教使用 rbegin()，方向与其他格相反
+    // vector<Tile> location = {"三教", "二教", "理教", "一教"};
+    // 三教/二教/理教用 begin()，一教用 rbegin()
+    bool isReverse = (pos == n - 1);  // 最后一个元素对应 rbegin()
+
+    int offset = 0;
     switch (op) {
-    case IteratorOp::INCREMENT:  targetPos = (pos + 1) % n; break;
-    case IteratorOp::DECREMENT:  targetPos = (pos - 1 + n) % n; break;
-    case IteratorOp::PLUS_EQ_2:  targetPos = (pos + 2) % n; break;
-    case IteratorOp::MINUS_EQ_2: targetPos = (pos - 2 + n) % n; break;
+    case IteratorOp::INCREMENT:  offset = 1;  break;
+    case IteratorOp::DECREMENT:  offset = -1; break;
+    case IteratorOp::PLUS_EQ_2:  offset = 2;  break;
+    case IteratorOp::MINUS_EQ_2: offset = -2; break;
     default: return -1;
     }
+
+    if (isReverse) {
+        offset = -offset;  // 反向迭代器：++ / -- / += / -= 方向取反
+    }
+
+    int targetPos = pos + offset;
+
+    // 线性遍历，越界则无效（模拟真实 C++ 迭代器，不环形传送）
+    if (targetPos < 0 || targetPos >= n) {
+        return -1;
+    }
+
     return m_iteratorIndices[targetPos];
 }
 
@@ -652,7 +671,8 @@ void Game::useIteratorCard(Player* player, int fromTileIndex,
 
     int target = computeIteratorTarget(fromTileIndex, op);
     if (target < 0) {
-        logEvent(player->name() + " 迭代器卡使用失败：无法找到目标迭代器格！");
+        logEvent(player->name() + QString(" 使用了迭代器卡(%1)的 %2 操作，但迭代器越界！卡片被消耗，无效果。")
+                 .arg(subName).arg(opName));
         m_waitingForDecision = false;
         endTurn();
         return;
