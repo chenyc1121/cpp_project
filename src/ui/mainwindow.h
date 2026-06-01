@@ -62,8 +62,12 @@ private:
     void endCurrentGame();
     void updatePropertyDisplay();
     QString playerSummary(Player* p) const;
+    QDialog* createBoardDialog(const QString& title);
+    void positionOnBoard(QDialog* dlg);
 
     Game* m_game = nullptr;
+    bool m_debugMode = false;
+    bool m_debugDialogOpen = false;
 
     BoardWidget* m_boardWidget;
     PlayerPanel* m_playerPanel;

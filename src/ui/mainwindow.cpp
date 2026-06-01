@@ -19,6 +19,7 @@
 #include <QDialog>
 #include <QFormLayout>
 #include <QSpinBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QButtonGroup>
 #include <QRadioButton>
@@ -105,6 +106,16 @@ void MainWindow::setupMenuBar() {
     QAction* newGameAction = gameMenu->addAction("新游戏(&N)");
     newGameAction->setShortcut(QKeySequence("Ctrl+N"));
     connect(newGameAction, &QAction::triggered, this, &MainWindow::onNewGame);
+
+    QAction* debugAction = gameMenu->addAction("DEBUG 模式(&D)");
+    debugAction->setCheckable(true);
+    debugAction->setChecked(false);
+    connect(debugAction, &QAction::toggled, this, [this](bool checked) {
+        m_debugMode = checked;
+        m_statusLabel->setText(checked
+            ? "DEBUG 模式已开启 —— 可手动设置骰子点数"
+            : "DEBUG 模式已关闭");
+    });
 
     QAction* rulesAction = gameMenu->addAction("规则说明(&R)");
     connect(rulesAction, &QAction::triggered, this, &MainWindow::onRules);
@@ -253,6 +264,52 @@ void MainWindow::onRules() {
 // ==================== 掷骰子 ====================
 void MainWindow::onRollDice() {
     if (!m_game) return;
+
+    if (m_debugMode && m_game->state() == GameState::PRE_ROLL) {
+        if (m_debugDialogOpen) return;
+
+        QDialog* dialog = new QDialog(this, Qt::WindowStaysOnTopHint);
+        dialog->setWindowTitle("DEBUG - 手动设置骰子");
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+        QFormLayout* form = new QFormLayout(dialog);
+
+        QSpinBox* spin1 = new QSpinBox(dialog);
+        spin1->setRange(1, 6);
+        QSpinBox* spin2 = new QSpinBox(dialog);
+        spin2->setRange(1, 6);
+
+        form->addRow("骰子1:", spin1);
+        form->addRow("骰子2:", spin2);
+
+        QDialogButtonBox* buttons = new QDialogButtonBox(
+            QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+        form->addRow(buttons);
+
+        connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+
+        connect(dialog, &QDialog::finished, this,
+                [this, spin1, spin2](int result) {
+                    m_debugDialogOpen = false;
+                    if (result == QDialog::Accepted && m_game) {
+                        m_game->debugRollDice(spin1->value(), spin2->value());
+                    } else if (m_game && m_game->state() == GameState::PRE_ROLL) {
+                        m_diceWidget->setRollEnabled(true);
+                    }
+                });
+
+        m_debugDialogOpen = true;
+        m_diceWidget->setRollEnabled(false);
+        dialog->show();
+        dialog->adjustSize();
+        QPoint boardCenter = m_boardWidget->mapToGlobal(
+            QPoint(m_boardWidget->width() / 2, m_boardWidget->height() / 2));
+        dialog->move(boardCenter.x() - dialog->width() / 2,
+                     boardCenter.y() - dialog->height() / 2);
+        return;
+    }
+
     m_game->rollDice();
 }
 
@@ -451,6 +508,23 @@ void MainWindow::onPlayerUpdated(Player* player) {
 }
 
 
+// ==================== 非模态弹窗辅助 ====================
+QDialog* MainWindow::createBoardDialog(const QString& title) {
+    m_diceWidget->setRollEnabled(false);
+    QDialog* dlg = new QDialog(this, Qt::WindowStaysOnTopHint);
+    dlg->setWindowTitle(title);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    return dlg;
+}
+
+void MainWindow::positionOnBoard(QDialog* dlg) {
+    dlg->adjustSize();
+    QPoint boardCenter = m_boardWidget->mapToGlobal(
+        QPoint(m_boardWidget->width() / 2, m_boardWidget->height() / 2));
+    dlg->move(boardCenter.x() - dlg->width() / 2,
+              boardCenter.y() - dlg->height() / 2);
+}
+
 // ==================== 购买/升级提示 ====================
 void MainWindow::onPromptBuyProperty(int tileIndex, Player* player) {
     if (!m_game || !player) return;
@@ -458,7 +532,6 @@ void MainWindow::onPromptBuyProperty(int tileIndex, Player* player) {
     Tile* t = m_game->board().tileAt(tileIndex);
     if (!t) return;
 
-    // 虚函数格 + 有虚函数卡 → 弹出选择对话框
     if (auto* vt = dynamic_cast<VirtualfuncTile*>(t)) {
         if (player->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
             int basePrice = vt->PropertyTile::price();
@@ -496,16 +569,33 @@ void MainWindow::onPromptBuyProperty(int tileIndex, Player* player) {
         return;
     }
 
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "购买地产", msg,
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    QDialog* dlg = createBoardDialog("购买地产");
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(msg, dlg));
 
-    if (reply == QMessageBox::Yes) {
+    auto* btnLayout = new QHBoxLayout();
+    auto* yesBtn = new QPushButton("购买 (¥" + QString::number(price) + ")", dlg);
+    auto* noBtn  = new QPushButton("放弃", dlg);
+    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    btnLayout->addStretch();
+    btnLayout->addWidget(yesBtn);
+    btnLayout->addWidget(noBtn);
+    layout->addLayout(btnLayout);
+
+    connect(yesBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
         m_game->buyProperty(player, tileIndex);
-    } else {
-        m_game->logEvent(player->name() + " 放弃购买 " + t->name());
+    });
+    connect(noBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->reject();
+        m_game->logEvent(player->name() + " 放弃购买 " +
+                         m_game->board().tileAt(tileIndex)->name());
         m_game->skipAction();
-    }
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 void MainWindow::onPromptBuildHouse(int tileIndex, Player* player) {
@@ -519,11 +609,10 @@ void MainWindow::onPromptBuildHouse(int tileIndex, Player* player) {
         return;
     }
 
-    // 虚函数格 + 有虚函数卡 → 弹出选择对话框
     if (auto* vt = dynamic_cast<VirtualfuncTile*>(pt)) {
         if (player->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
             int baseCost = vt->houseCost();
-            int derivedCost = vt->houseCost();  // 建房费相同，但 buildHouse 行为可能不同
+            int derivedCost = vt->houseCost();
             onPromptVirtualFuncBuild(player, tileIndex, baseCost, derivedCost);
             return;
         }
@@ -547,57 +636,74 @@ void MainWindow::onPromptBuildHouse(int tileIndex, Player* player) {
         return;
     }
 
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "升级地产", info,
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    QDialog* dlg = createBoardDialog("升级地产");
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(info, dlg));
 
-    if (reply == QMessageBox::Yes) {
+    auto* btnLayout = new QHBoxLayout();
+    auto* yesBtn = new QPushButton("升级", dlg);
+    auto* noBtn  = new QPushButton("放弃", dlg);
+    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    btnLayout->addStretch();
+    btnLayout->addWidget(yesBtn);
+    btnLayout->addWidget(noBtn);
+    layout->addLayout(btnLayout);
+
+    connect(yesBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
         m_game->buildHouse(player, tileIndex);
-    } else {
+    });
+    connect(noBtn, &QPushButton::clicked, this, [this, dlg]() {
+        dlg->reject();
         m_game->skipAction();
-    }
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
 // ==================== 问答格 ====================
 void MainWindow::onPromptQA(Player* player, int tileIndex) {
     if (!m_game || !player) return;
+    Q_UNUSED(tileIndex)
 
     Question q = QuestionBank::drawRandom();
     m_game->setCurrentQuestion(q);
-    QDialog dialog(this);
-    dialog.setWindowTitle(player->name()+" 来到了问答格");
-    dialog.setMinimumWidth(350);
-    QVBoxLayout *layout=new QVBoxLayout(&dialog);
-    layout->addWidget(new QLabel(q.text));
-    QString options[4]={"A "+q.optionA,"B "+q.optionB,"C "+q.optionC,"D "+q.optionD};
-    QButtonGroup *grp=new QButtonGroup(&dialog);
-    QVector<QRadioButton*> radioButtons;
-    for(int i=0;i<4;i++){
-        QRadioButton *radio=new QRadioButton();
-        QString text=options[i];
-        radio->setText(text);
-        grp->addButton(radio,i);
-        radioButtons.append(radio);
+    QDialog* dlg = createBoardDialog(player->name() + " 来到了问答格");
+    dlg->setMinimumWidth(350);
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(q.text, dlg));
+    QString options[4] = {"A " + q.optionA, "B " + q.optionB,
+                          "C " + q.optionC, "D " + q.optionD};
+    QButtonGroup* grp = new QButtonGroup(dlg);
+    for (int i = 0; i < 4; i++) {
+        auto* radio = new QRadioButton(options[i], dlg);
+        grp->addButton(radio, i);
         layout->addWidget(radio);
     }
-    QHBoxLayout *buttonLayout=new QHBoxLayout();
-    QPushButton *answerButton=new QPushButton("确定");
-    QPushButton *cancelButton=new QPushButton("离开");
+    auto* buttonLayout = new QHBoxLayout();
+    auto* answerButton = new QPushButton("确定", dlg);
+    auto* cancelButton = new QPushButton("离开", dlg);
     answerButton->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px}");
     cancelButton->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px}");
     buttonLayout->addStretch();
     buttonLayout->addWidget(answerButton);
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
-    connect(answerButton,&QPushButton::clicked,[&](){
-        int idx=grp->checkedId();
-        m_game->answerQA(player,player->position(),idx);
-        dialog.accept();
+
+    connect(answerButton, &QPushButton::clicked, this, [this, dlg, player, grp]() {
+        m_game->answerQA(player, player->position(), grp->checkedId());
+        dlg->accept();
     });
-    connect(cancelButton,&QPushButton::clicked,&dialog,&QDialog::reject);
-    dialog.exec();
-    m_game->skipAction();
+    connect(cancelButton, &QPushButton::clicked, this, [this, dlg]() {
+        dlg->reject();
+        m_game->skipAction();
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
@@ -607,39 +713,39 @@ void MainWindow::onPromptComputerLab(Player* player) {
 
     Question q = QuestionBank::drawRandom();
     m_game->setCurrentQuestion(q);
-    QDialog dialog(this);
-    dialog.setWindowTitle(player->name()+" 前来上机");
-    dialog.setMinimumWidth(350);
-    QVBoxLayout *layout=new QVBoxLayout(&dialog);
-    layout->addWidget(new QLabel(q.text));
-    QString options[4]={"A "+q.optionA,"B "+q.optionB,"C "+q.optionC,"D "+q.optionD};
-    QButtonGroup *grp=new QButtonGroup(&dialog);
-    QVector<QRadioButton*> radioButtons;
-    for(int i=0;i<4;i++){
-        QRadioButton *radio=new QRadioButton();
-        QString text=options[i];
-        radio->setText(text);
-        grp->addButton(radio,i);
-        radioButtons.append(radio);
+    QDialog* dlg = createBoardDialog(player->name() + " 前来上机");
+    dlg->setMinimumWidth(350);
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(q.text, dlg));
+    QString options[4] = {"A " + q.optionA, "B " + q.optionB,
+                          "C " + q.optionC, "D " + q.optionD};
+    QButtonGroup* grp = new QButtonGroup(dlg);
+    for (int i = 0; i < 4; i++) {
+        auto* radio = new QRadioButton(options[i], dlg);
+        grp->addButton(radio, i);
         layout->addWidget(radio);
     }
-    QHBoxLayout *buttonLayout=new QHBoxLayout();
-    QPushButton *answerButton=new QPushButton("确定");
-    QPushButton *cancelButton=new QPushButton("离开");
+    auto* buttonLayout = new QHBoxLayout();
+    auto* answerButton = new QPushButton("确定", dlg);
+    auto* cancelButton = new QPushButton("离开", dlg);
     answerButton->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px}");
     cancelButton->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px}");
     buttonLayout->addStretch();
     buttonLayout->addWidget(answerButton);
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
-    connect(answerButton,&QPushButton::clicked,[&](){
-        int idx=grp->checkedId();
-        m_game->answerComputerLab(player,idx);
-        dialog.accept();
+
+    connect(answerButton, &QPushButton::clicked, this, [this, dlg, player, grp]() {
+        m_game->answerComputerLab(player, grp->checkedId());
+        dlg->accept();
     });
-    connect(cancelButton,&QPushButton::clicked,&dialog,&QDialog::reject);
-    dialog.exec();
-    m_game->skipAction();
+    connect(cancelButton, &QPushButton::clicked, this, [this, dlg]() {
+        dlg->reject();
+        m_game->skipAction();
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
@@ -670,54 +776,54 @@ void MainWindow::onPromptShop(Player* player) {
         }
     }
 
-    QDialog dialog(this);
-    dialog.setWindowTitle(player->name()+" 来到了麦叔的铺子");
-    dialog.setMinimumWidth(350);
-    QVBoxLayout *layout=new QVBoxLayout(&dialog);
-    QLabel *titleLabel=new QLabel("欢迎光临！看看要买点什么呢？");
-    QLabel *moneyLabel=new QLabel("当前资金：¥"+QString::number(player->money()));
-    layout->addWidget(titleLabel);
-    layout->addWidget(moneyLabel);
-    QButtonGroup *grp=new QButtonGroup(&dialog);
-    QVector<QRadioButton*> radioButtons;
-    for(int i=0;i<displayCards.size();i++){
-        const EffectCard& card=displayCards[i];
-        QRadioButton *radio=new QRadioButton();
-        QString text=card.name+" (¥" + QString::number(card.price) + ")";
-        if(!player->canAfford(card.price)){
-            text+=" - 资金不足";
+    QDialog* dlg = createBoardDialog(player->name() + " 来到了麦叔的铺子");
+    dlg->setMinimumWidth(350);
+    QVBoxLayout* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel("欢迎光临！看看要买点什么呢？", dlg));
+    layout->addWidget(new QLabel("当前资金：¥" + QString::number(player->money()), dlg));
+    QButtonGroup* grp = new QButtonGroup(dlg);
+    for (int i = 0; i < displayCards.size(); i++) {
+        const EffectCard& card = displayCards[i];
+        QRadioButton* radio = new QRadioButton(dlg);
+        QString text = card.name + " (¥" + QString::number(card.price) + ")";
+        if (!player->canAfford(card.price)) {
+            text += " - 资金不足";
             radio->setEnabled(false);
             radio->setStyleSheet("color:#cccccc");
         }
         radio->setText(text);
-        grp->addButton(radio,i);
-        radioButtons.append(radio);
+        grp->addButton(radio, i);
         layout->addWidget(radio);
     }
-    QHBoxLayout *buttonLayout=new QHBoxLayout();
-    QPushButton *buyButton=new QPushButton("购买");
-    QPushButton *cancelButton=new QPushButton("离开");
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    QPushButton* buyButton = new QPushButton("购买", dlg);
+    QPushButton* cancelButton = new QPushButton("离开", dlg);
     buyButton->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
     cancelButton->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
     buttonLayout->addStretch();
     buttonLayout->addWidget(buyButton);
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
-    connect(buyButton,&QPushButton::clicked,[&](){
-        int idx=grp->checkedId();
-        if(idx>=0&&idx<displayCards.size()){
-            const EffectCard& selectedCard=displayCards[idx];
-            if(player->canAfford(selectedCard.price)){
-                m_game->buyEffectCard(player,selectedCard);
-                dialog.accept();
-            } else{
-                m_game->logEvent(player->name()+" 资金不足，无法购买！");
+
+    connect(buyButton, &QPushButton::clicked, this, [this, dlg, player, grp, displayCards]() {
+        int idx = grp->checkedId();
+        if (idx >= 0 && idx < displayCards.size()) {
+            const EffectCard& selectedCard = displayCards[idx];
+            if (player->canAfford(selectedCard.price)) {
+                m_game->buyEffectCard(player, selectedCard);
+                dlg->accept();
+            } else {
+                m_game->logEvent(player->name() + " 资金不足，无法购买！");
             }
         }
     });
-    connect(cancelButton,&QPushButton::clicked,&dialog,&QDialog::reject);
-    dialog.exec();
-    m_game->skipAction();
+    connect(cancelButton, &QPushButton::clicked, this, [this, dlg]() {
+        dlg->reject();
+        m_game->skipAction();
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
@@ -725,16 +831,32 @@ void MainWindow::onPromptShop(Player* player) {
 void MainWindow::onPromptShopEntrance(Player* player) {
     if (!m_game || !player) return;
 
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "商店入口",
-        player->name() + "，前方是商店！是否进入购买效果卡？",
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    QDialog* dlg = createBoardDialog("商店入口");
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(
+        player->name() + "，前方是商店！是否进入购买效果卡？", dlg));
 
-    if (reply == QMessageBox::Yes) {
+    auto* btnLayout = new QHBoxLayout();
+    auto* yesBtn = new QPushButton("进入", dlg);
+    auto* noBtn  = new QPushButton("跳过", dlg);
+    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    btnLayout->addStretch();
+    btnLayout->addWidget(yesBtn);
+    btnLayout->addWidget(noBtn);
+    layout->addLayout(btnLayout);
+
+    connect(yesBtn, &QPushButton::clicked, this, [this, dlg, player]() {
+        dlg->accept();
         m_game->goToShop(player);
-    } else {
+    });
+    connect(noBtn, &QPushButton::clicked, this, [this, dlg]() {
+        dlg->reject();
         m_game->declineShopEntrance();
-    }
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
@@ -744,12 +866,32 @@ void MainWindow::onPromptUseCard(Player* player, EffectCardType type) {
 
     EffectCard card = createEffectCard(type);
 
-    QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "使用效果卡",
-        player->name() + "，是否使用 " + card.name + "？\n" + card.description,
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    QDialog* dlg = createBoardDialog("使用效果卡");
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(
+        player->name() + "，是否使用 " + card.name + "？\n" + card.description, dlg));
 
-    m_game->onCardDecision(type, reply == QMessageBox::Yes);
+    auto* btnLayout = new QHBoxLayout();
+    auto* yesBtn = new QPushButton("使用", dlg);
+    auto* noBtn  = new QPushButton("不用", dlg);
+    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    btnLayout->addStretch();
+    btnLayout->addWidget(yesBtn);
+    btnLayout->addWidget(noBtn);
+    layout->addLayout(btnLayout);
+
+    connect(yesBtn, &QPushButton::clicked, this, [this, dlg, type]() {
+        dlg->accept();
+        m_game->onCardDecision(type, true);
+    });
+    connect(noBtn, &QPushButton::clicked, this, [this, dlg, type]() {
+        dlg->reject();
+        m_game->onCardDecision(type, false);
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
@@ -757,31 +899,33 @@ void MainWindow::onPromptUseCard(Player* player, EffectCardType type) {
 void MainWindow::onPromptUniversalDice(Player* player) {
     if (!m_game || !player) return;
 
-    QDialog dialog(this);
-    dialog.setWindowTitle("万能骰子 - " + player->name());
+    QDialog* dlg = createBoardDialog("万能骰子 - " + player->name());
 
-    QFormLayout* form = new QFormLayout(&dialog);
+    QFormLayout* form = new QFormLayout(dlg);
 
-    QSpinBox* spin1 = new QSpinBox(&dialog);
+    QSpinBox* spin1 = new QSpinBox(dlg);
     spin1->setRange(1, 6);
-    QSpinBox* spin2 = new QSpinBox(&dialog);
+    QSpinBox* spin2 = new QSpinBox(dlg);
     spin2->setRange(1, 6);
 
     form->addRow("骰子1:", spin1);
     form->addRow("骰子2:", spin2);
 
     QDialogButtonBox* buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dlg);
     form->addRow(buttons);
 
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-
-    if (dialog.exec() == QDialog::Accepted) {
+    connect(buttons, &QDialogButtonBox::accepted, this, [this, dlg, spin1, spin2]() {
+        dlg->accept();
         m_game->setUniversalDice(spin1->value(), spin2->value());
-    } else {
+    });
+    connect(buttons, &QDialogButtonBox::rejected, this, [this, dlg]() {
+        dlg->reject();
         m_game->onCardDecision(EffectCardType::UNIVERSAL_DICE, false);
-    }
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
@@ -798,27 +942,39 @@ void MainWindow::onPromptVirtualFuncBuy(Player* player, int tileIndex,
                   "🔀 派生类价格：¥" + QString::number(derivedPrice) + "（需消耗虚函数卡）\n\n"
                   "当前资金：¥" + QString::number(player->money());
 
-    QMessageBox msgBox(this);
-    msgBox.setWindowTitle("虚函数卡 — 购买地产");
-    msgBox.setText(msg);
+    QDialog* dlg = createBoardDialog("虚函数卡 — 购买地产");
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(msg, dlg));
 
-    QPushButton* baseBtn = msgBox.addButton("基类购买 (¥" + QString::number(basePrice) + ")", QMessageBox::YesRole);
-    QPushButton* derivedBtn = nullptr;
-    if (player->canAfford(derivedPrice)) {
-        derivedBtn = msgBox.addButton("派生类购买 (¥" + QString::number(derivedPrice) + ")", QMessageBox::AcceptRole);
-    }
-    QPushButton* cancelBtn = msgBox.addButton("取消", QMessageBox::RejectRole);
+    auto* btnLayout = new QHBoxLayout();
+    QPushButton* baseBtn = new QPushButton("基类购买 (¥" + QString::number(basePrice) + ")", dlg);
+    baseBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(baseBtn);
+    QPushButton* derivedBtn = new QPushButton("派生类购买 (¥" + QString::number(derivedPrice) + ")", dlg);
+    if (!player->canAfford(derivedPrice)) derivedBtn->setEnabled(false);
+    derivedBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(derivedBtn);
+    QPushButton* cancelBtn = new QPushButton("取消", dlg);
+    cancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(cancelBtn);
+    layout->addLayout(btnLayout);
 
-    msgBox.exec();
-
-    if (msgBox.clickedButton() == derivedBtn) {
-        m_game->buyPropertyVirtualFunc(player, tileIndex, true);
-    } else if (msgBox.clickedButton() == baseBtn) {
+    connect(baseBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
         m_game->buyPropertyVirtualFunc(player, tileIndex, false);
-    } else {
+    });
+    connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
+        m_game->buyPropertyVirtualFunc(player, tileIndex, true);
+    });
+    connect(cancelBtn, &QPushButton::clicked, this, [this, dlg, player, t]() {
+        dlg->reject();
         m_game->logEvent(player->name() + " 放弃购买 " + t->name());
         m_game->skipAction();
-    }
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 void MainWindow::onPromptVirtualFuncRent(Player* player, int tileIndex,
@@ -836,27 +992,37 @@ void MainWindow::onPromptVirtualFuncRent(Player* player, int tileIndex,
                   "🔀 派生类租金：¥" + QString::number(derivedRent) + "（需消耗虚函数卡）\n\n"
                   "当前资金：¥" + QString::number(player->money());
 
-    QMessageBox msgBox(this);
-    msgBox.setWindowTitle("虚函数卡 — 支付租金");
-    msgBox.setText(msg);
+    QDialog* dlg = createBoardDialog("虚函数卡 — 支付租金");
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(msg, dlg));
 
-    QPushButton* baseBtn = msgBox.addButton("基类付租 (¥" + QString::number(baseRent) + ")", QMessageBox::YesRole);
-    QPushButton* derivedBtn = nullptr;
-    if (player->canAfford(derivedRent) || true) {  // 即使付不起也可以选
-        derivedBtn = msgBox.addButton("派生类付租 (¥" + QString::number(derivedRent) + ")", QMessageBox::AcceptRole);
-    }
-    QPushButton* cancelBtn = msgBox.addButton("跳过（不使用虚函数卡）", QMessageBox::RejectRole);
+    auto* btnLayout = new QHBoxLayout();
+    QPushButton* baseBtn = new QPushButton("基类付租 (¥" + QString::number(baseRent) + ")", dlg);
+    baseBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(baseBtn);
+    QPushButton* derivedBtn = new QPushButton("派生类付租 (¥" + QString::number(derivedRent) + ")", dlg);
+    derivedBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(derivedBtn);
+    QPushButton* cancelBtn = new QPushButton("跳过", dlg);
+    cancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(cancelBtn);
+    layout->addLayout(btnLayout);
 
-    msgBox.exec();
-
-    if (msgBox.clickedButton() == derivedBtn) {
+    connect(baseBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
+        m_game->payRentVirtualFunc(player, tileIndex, false);
+    });
+    connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
         m_game->payRentVirtualFunc(player, tileIndex, true);
-    } else if (msgBox.clickedButton() == cancelBtn) {
-        // 默认基类付租
+    });
+    connect(cancelBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->reject();
         m_game->payRentVirtualFunc(player, tileIndex, false);
-    } else {
-        m_game->payRentVirtualFunc(player, tileIndex, false);
-    }
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
@@ -880,26 +1046,38 @@ void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
             "🔀 派生类建房费：¥" + QString::number(derivedCost) + "（需消耗虚函数卡）\n\n"
             "当前资金：¥" + QString::number(player->money());
 
-    QMessageBox msgBox(this);
-    msgBox.setWindowTitle("虚函数卡 — 建房");
-    msgBox.setText(info);
+    QDialog* dlg = createBoardDialog("虚函数卡 — 建房");
+    auto* layout = new QVBoxLayout(dlg);
+    layout->addWidget(new QLabel(info, dlg));
 
-    QPushButton* baseBtn = msgBox.addButton("基类建造 (¥" + QString::number(baseCost) + ")", QMessageBox::YesRole);
-    QPushButton* derivedBtn = nullptr;
-    if (player->canAfford(derivedCost)) {
-        derivedBtn = msgBox.addButton("派生类建造 (¥" + QString::number(derivedCost) + ")", QMessageBox::AcceptRole);
-    }
-    QPushButton* cancelBtn = msgBox.addButton("取消", QMessageBox::RejectRole);
+    auto* btnLayout = new QHBoxLayout();
+    QPushButton* baseBtn = new QPushButton("基类建造 (¥" + QString::number(baseCost) + ")", dlg);
+    baseBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(baseBtn);
+    QPushButton* derivedBtn = new QPushButton("派生类建造 (¥" + QString::number(derivedCost) + ")", dlg);
+    if (!player->canAfford(derivedCost)) derivedBtn->setEnabled(false);
+    derivedBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(derivedBtn);
+    QPushButton* cancelBtn = new QPushButton("取消", dlg);
+    cancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(cancelBtn);
+    layout->addLayout(btnLayout);
 
-    msgBox.exec();
-
-    if (msgBox.clickedButton() == derivedBtn) {
-        m_game->buildHouseVirtualFunc(player, tileIndex, true);
-    } else if (msgBox.clickedButton() == baseBtn) {
+    connect(baseBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
         m_game->buildHouseVirtualFunc(player, tileIndex, false);
-    } else {
+    });
+    connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
+        m_game->buildHouseVirtualFunc(player, tileIndex, true);
+    });
+    connect(cancelBtn, &QPushButton::clicked, this, [this, dlg]() {
+        dlg->reject();
         m_game->skipAction();
-    }
+    });
+
+    dlg->show();
+    positionOnBoard(dlg);
 }
 
 
@@ -934,46 +1112,86 @@ void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
         cardNames << card.name + " [支持: " + ops.trimmed() + "]";
     }
 
-    bool ok;
-    QString cardChoice = QInputDialog::getItem(this,
-        "迭代器卡 — " + player->name(),
-        player->name() + "，选择要使用的迭代器卡：\n（选择取消则不使用）",
-        cardNames, 0, false, &ok);
+    // Step 1: choose card
+    QDialog* cardDlg = createBoardDialog("迭代器卡 — " + player->name());
+    auto* cLayout = new QVBoxLayout(cardDlg);
+    cLayout->addWidget(new QLabel(
+        player->name() + "，选择要使用的迭代器卡：", cardDlg));
+    QComboBox* cardCombo = new QComboBox(cardDlg);
+    cardCombo->addItems(cardNames);
+    cLayout->addWidget(cardCombo);
+    auto* cBtnLayout = new QHBoxLayout();
+    QPushButton* nextBtn = new QPushButton("下一步", cardDlg);
+    QPushButton* cCancelBtn = new QPushButton("取消", cardDlg);
+    nextBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    cCancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    cBtnLayout->addStretch();
+    cBtnLayout->addWidget(nextBtn);
+    cBtnLayout->addWidget(cCancelBtn);
+    cLayout->addLayout(cBtnLayout);
 
-    if (!ok) {
+    connect(cCancelBtn, &QPushButton::clicked, this, [this, cardDlg]() {
+        cardDlg->reject();
         m_game->declineIteratorCard();
-        return;
-    }
+    });
 
-    int cardIdx = cardIndices[cardNames.indexOf(cardChoice)];
-    IteratorSubtype sub = player->effectCards()[cardIdx].iterSubtype;
-    QString subName = iteratorSubtypeName(sub);
+    connect(nextBtn, &QPushButton::clicked, this, [this, cardDlg, player, tileIndex,
+              cardIndices, cardNames, cardCombo]() {
+        int idx = cardCombo->currentIndex();
+        if (idx < 0 || idx >= cardIndices.size()) {
+            cardDlg->reject();
+            m_game->declineIteratorCard();
+            return;
+        }
+        int cardIdx = cardIndices[idx];
+        IteratorSubtype sub = player->effectCards()[cardIdx].iterSubtype;
+        QString subName = iteratorSubtypeName(sub);
 
-    // 选择操作
-    QStringList ops;
-    ops << "++ (前进1格)" << "-- (后退1格)" << "+=2 (前进2格)" << "-=2 (后退2格)";
+        cardDlg->accept();
 
-    QString opChoice = QInputDialog::getItem(this,
-        "迭代器操作 — " + player->name(),
-        player->name() + " 使用 " + subName + "\n请选择操作（选择不支持的将被消耗且无效）：",
-        ops, 0, false, &ok);
+        // Step 2: choose operation
+        QDialog* opDlg = createBoardDialog("迭代器操作 — " + player->name());
+        auto* oLayout = new QVBoxLayout(opDlg);
+        oLayout->addWidget(new QLabel(
+            player->name() + " 使用 " + subName + "\n请选择操作：", opDlg));
+        QStringList ops = {"++ (前进1格)", "-- (后退1格)", "+=2 (前进2格)", "-=2 (后退2格)"};
+        QComboBox* opCombo = new QComboBox(opDlg);
+        opCombo->addItems(ops);
+        oLayout->addWidget(opCombo);
+        auto* oBtnLayout = new QHBoxLayout();
+        QPushButton* okBtn = new QPushButton("确定", opDlg);
+        QPushButton* oCancelBtn = new QPushButton("取消", opDlg);
+        okBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+        oCancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+        oBtnLayout->addStretch();
+        oBtnLayout->addWidget(okBtn);
+        oBtnLayout->addWidget(oCancelBtn);
+        oLayout->addLayout(oBtnLayout);
 
-    if (!ok) {
-        m_game->declineIteratorCard();
-        return;
-    }
+        connect(oCancelBtn, &QPushButton::clicked, this, [this, opDlg]() {
+            opDlg->reject();
+            m_game->declineIteratorCard();
+        });
+        connect(okBtn, &QPushButton::clicked, this, [this, opDlg, player, tileIndex,
+                sub, opCombo]() {
+            opDlg->accept();
+            IteratorOp op;
+            switch (opCombo->currentIndex()) {
+            case 0: op = IteratorOp::INCREMENT; break;
+            case 1: op = IteratorOp::DECREMENT; break;
+            case 2: op = IteratorOp::PLUS_EQ_2; break;
+            case 3: op = IteratorOp::MINUS_EQ_2; break;
+            default: op = IteratorOp::INCREMENT; break;
+            }
+            m_game->useIteratorCard(player, tileIndex, sub, op);
+        });
 
-    IteratorOp op;
-    int opIdx = ops.indexOf(opChoice);
-    switch (opIdx) {
-    case 0: op = IteratorOp::INCREMENT; break;
-    case 1: op = IteratorOp::DECREMENT; break;
-    case 2: op = IteratorOp::PLUS_EQ_2; break;
-    case 3: op = IteratorOp::MINUS_EQ_2; break;
-    default: op = IteratorOp::INCREMENT; break;
-    }
+        opDlg->show();
+        positionOnBoard(opDlg);
+    });
 
-    m_game->useIteratorCard(player, tileIndex, sub, op);
+    cardDlg->show();
+    positionOnBoard(cardDlg);
 }
 
 

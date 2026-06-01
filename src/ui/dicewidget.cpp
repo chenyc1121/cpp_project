@@ -24,7 +24,7 @@ DiceWidget::DiceWidget(QWidget* parent)
     m_die1Label->setAlignment(Qt::AlignCenter);
     m_die1Label->setFixedSize(80, 80);
     m_die1Label->setStyleSheet(
-        "background-color: #000000; border: 3px solid #333; border-radius: 10px;");
+        "background-color: #000000; color: white; border: 3px solid #333; border-radius: 10px;");
     diceLayout->addWidget(m_die1Label);
 
     m_die2Label = new QLabel("?", this);
@@ -32,7 +32,7 @@ DiceWidget::DiceWidget(QWidget* parent)
     m_die2Label->setAlignment(Qt::AlignCenter);
     m_die2Label->setFixedSize(80, 80);
     m_die2Label->setStyleSheet(
-        "background-color: #000000; border: 3px solid #333; border-radius: 10px;");
+        "background-color: #000000; color: white; border: 3px solid #333; border-radius: 10px;");
     diceLayout->addWidget(m_die2Label);
 
     groupLayout->addLayout(diceLayout);

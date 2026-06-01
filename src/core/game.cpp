@@ -99,6 +99,26 @@ void Game::rollDice() {
     m_dice->roll();
 }
 
+void Game::debugRollDice(int die1, int die2) {
+    if (m_state != GameState::PRE_ROLL) return;
+
+    m_state = GameState::ROLLING;
+    emit gameStateChanged(m_state);
+
+    Player* player = currentPlayer();
+
+    if (player->skipNextTurn()) {
+        player->setSkipNextTurn(false);
+        logEvent(player->name() + " 因上机课跳过本回合！");
+        emit playerUpdated(player);
+        endTurn();
+        return;
+    }
+
+    logEvent(player->name() + " [DEBUG] 手动设置骰子...");
+    onDiceRolled(die1, die2);
+}
+
 void Game::onDiceRolled(int die1, int die2) {
     m_lastDie1 = die1;
     m_lastDie2 = die2;

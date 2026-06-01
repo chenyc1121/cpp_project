@@ -49,6 +49,7 @@ public:
 
     // === 回合流程 ===
     void rollDice();
+    void debugRollDice(int die1, int die2);
     void movePlayer();
     void handleLanding();
     void endTurn();
