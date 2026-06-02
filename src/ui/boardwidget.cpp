@@ -382,8 +382,8 @@ void BoardWidget::mousePressEvent(QMouseEvent* event) {
         bool isCorner = (i == 0 || i == 7 || i == 14 || i == 21);
 
         if (titleBarButtonRect(tr, isCorner).contains(event->pos())) {
-            QMessageBox::information(this, t->name() + " — 标题栏",
-                                     t->titleBarText());
+            QMessageBox::information(this, t->name() + " — 说明",
+                                     t->titleDetail());
             return;
         }
 
@@ -399,8 +399,16 @@ void BoardWidget::mousePressEvent(QMouseEvent* event) {
         if (auto* pt = dynamic_cast<PropertyTile*>(t)) {
             info += "\n类型: 地产 (" + ::colorGroupName(pt->group()) + ")";
             info += "\n价格: ¥" + QString::number(pt->price());
+            info += "\n建房费: ¥" + QString::number(pt->houseCost()) + "/栋";
+            info += "\n\n基础租金表：";
+            info += "\n  空地: ¥" + QString::number(pt->rentAtLevel(0));
+            info += "\n  1栋:  ¥" + QString::number(pt->rentAtLevel(1));
+            info += "\n  2栋:  ¥" + QString::number(pt->rentAtLevel(2));
+            info += "\n  3栋:  ¥" + QString::number(pt->rentAtLevel(3));
+            info += "\n  4栋:  ¥" + QString::number(pt->rentAtLevel(4));
+            info += "\n  旅馆: ¥" + QString::number(pt->rentAtLevel(5));
             if (pt->owner()) {
-                info += "\n所有者: " + pt->owner()->name();
+                info += "\n\n所有者: " + pt->owner()->name();
                 info += "\n当前租金: ¥" + QString::number(pt->calculateRent());
                 if (pt->houses() > 0)
                     info += "\n房屋: " + QString::number(pt->houses()) + " 栋";
@@ -410,18 +418,32 @@ void BoardWidget::mousePressEvent(QMouseEvent* event) {
         } else if (auto* ut = dynamic_cast<UtilityTile*>(t)) {
             info += "\n类型: 公共设施";
             info += "\n价格: ¥" + QString::number(ut->price());
+            info += "\n\n基础租金规则：";
+            info += "\n  拥有1个公共设施: 骰子点数 × 4";
+            info += "\n  拥有2个公共设施: 骰子点数 × 10";
             if (ut->owner())
-                info += "\n所有者: " + ut->owner()->name();
+                info += "\n\n所有者: " + ut->owner()->name();
         } else if (auto* rt = dynamic_cast<RailroadTile*>(t)) {
             info += "\n类型: 铁路车站";
             info += "\n价格: ¥" + QString::number(rt->price());
+            info += "\n\n基础租金表：";
+            info += "\n  1个车站: ¥250";
+            info += "\n  2个车站: ¥500";
+            info += "\n  3个车站: ¥1000";
+            info += "\n  4个车站: ¥2000";
             if (rt->owner())
-                info += "\n所有者: " + rt->owner()->name();
+                info += "\n\n所有者: " + rt->owner()->name();
         } else if (auto* it_tile = dynamic_cast<IteratorTile*>(t)) {
             info += "\n类型: 迭代器格";
             info += "\n价格: ¥" + QString::number(it_tile->price());
+            int base = it_tile->baseRent();
+            info += "\n\n基础租金表：";
+            info += "\n  1个迭代器格: ¥" + QString::number(base);
+            info += "\n  2个迭代器格: ¥" + QString::number(base * 2);
+            info += "\n  3个迭代器格: ¥" + QString::number(base * 4);
+            info += "\n  4个迭代器格: ¥" + QString::number(base * 8);
             if (it_tile->owner())
-                info += "\n所有者: " + it_tile->owner()->name();
+                info += "\n\n所有者: " + it_tile->owner()->name();
             info += "\n\n拥有迭代器卡时可在此格选择操作传送至其他迭代器格。";
         } else if (t->type() == TileType::QA) {
             info += "\n类型: 问答格";

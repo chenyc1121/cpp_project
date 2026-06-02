@@ -27,7 +27,8 @@ Tile* createTile(const TileDef& def, int index) {
 Tile::Tile(const TileDef& def, int index)
     : m_index(index), m_name(def.name), m_type(def.type),
       m_group(def.group), m_price(def.price),
-      m_titleBarText(def.titleBarText), m_infoText(def.infoText)
+      m_titleBarText(def.titleBarText), m_infoText(def.infoText),
+      m_titleDetail(def.titleDetail ? QString(def.titleDetail) : QString())
 {
 }
 
@@ -64,9 +65,11 @@ PropertyTile::PropertyTile(const TileDef& def, int index)
 
 void PropertyTile::landOn(Player* player, Game* game) {
     if (m_owner == nullptr) {
+        game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
     } else if (m_owner == player) {
         if (canBuildHouse(player)) {
+            game->setWaitingForDecision(true);
             emit game->promptBuildHouse(m_index, player);
         }
     } else if (!m_owner->isBankrupt()) {
@@ -136,33 +139,55 @@ VirtualfuncTile::VirtualfuncTile(const TileDef& def, int index)
       m_buyRatio(def.buy_ratio),
       m_rentRatio(def.rent_ratio),
       m_buyDecay(def.buy_decay),
-      m_rentDecay(def.rent_decay)
+      m_rentDecay(def.rent_decay),
+      m_rentIsPureVirtual(def.rentIsPureVirtual),
+      m_rentIsNonVirtual(def.rentIsNonVirtual)
 {
 }
 
 void VirtualfuncTile::landOn(Player* player, Game* game) {
     if (m_owner == nullptr) {
+        // 无主：提示购买
+        game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
     } else if (m_owner == player) {
+        // 自己踩中：提示建房
         if (canBuildHouse(player)) {
+            game->setWaitingForDecision(true);
             emit game->promptBuildHouse(m_index, player);
         }
     } else if (!m_owner->isBankrupt()) {
-        // 检查虚函数卡 — 由 game 层 emit 信号处理
-        if (player->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
-            int baseRent = PropertyTile::calculateRent();
-            int derivedRent = VirtualfuncTile::calculateRent();
-            game->logEvent(player->name() + " 停在虚函数格 " + m_name
-                           + "（属于" + m_owner->name() + "），可选择基类/派生类租金");
-            emit game->promptVirtualFuncRent(player, m_index, baseRent, derivedRent);
+        // 别人踩中地主的地 —— 地主决定是否用虚函数卡
+        Player* payer = player;
+        Player* owner = m_owner;
+
+        // Case 1: 纯虚函数租金 + 地主无卡 → 无法收租
+        if (m_rentIsPureVirtual && !owner->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
+            game->logEvent(payer->name() + " 停在 " + m_name
+                           + "（属于" + owner->name() + "），"
+                           + "该格租金为纯虚函数，无法收取租金");
+            game->handlePureVirtualNoRent(payer, m_index);
             return;
         }
-        // 无虚函数卡，使用基类行为
+
+        // Case 2: 地主有卡 → 弹窗让地主选择基类/派生类
+        if (owner->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
+            int baseRent = PropertyTile::calculateRent();
+            int derivedRent = VirtualfuncTile::calculateRent();
+            game->logEvent(payer->name() + " 停在虚函数格 " + m_name
+                           + "（属于" + owner->name() + "），"
+                           + owner->name() + " 可选择基类/派生类租金");
+            game->setWaitingForDecision(true);
+            emit game->promptVirtualFuncRent(payer, m_index, owner, baseRent, derivedRent);
+            return;
+        }
+
+        // Case 3: 地主无卡 → 收基类租金
         int rent = PropertyTile::calculateRent();
-        QString msg = player->name() + " 停在 " + m_name
-                      + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元";
-        game->logEvent(msg);
-        player->payMoneyTo(rent, m_owner, game);
+        game->logEvent(payer->name() + " 停在 " + m_name
+                       + "（属于" + owner->name() + "），支付租金 "
+                       + QString::number(rent) + " 元");
+        payer->payMoneyTo(rent, owner, game);
     }
 }
 
@@ -217,6 +242,7 @@ QATile::QATile(const TileDef& def, int index)
 
 void QATile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 停在问答格！");
+    game->setWaitingForDecision(true);
     emit game->promptQA(player, m_index);
 }
 
@@ -237,6 +263,7 @@ ShopTile::ShopTile(const TileDef& def, int index)
 
 void ShopTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 来到商店！");
+    game->setWaitingForDecision(true);
     emit game->promptShop(player);
 }
 
@@ -248,6 +275,7 @@ ComputerLabTile::ComputerLabTile(const TileDef& def, int index)
 void ComputerLabTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 进入上机课（计算机实验课），需回答一道题，下回合跳过！");
     player->setSkipNextTurn(true);
+    game->setWaitingForDecision(true);
     emit game->promptComputerLab(player);
 }
 
@@ -258,6 +286,7 @@ ShopEntranceTile::ShopEntranceTile(const TileDef& def, int index)
 
 void ShopEntranceTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 经过商店入口");
+    game->setWaitingForDecision(true);
     emit game->promptShopEntrance(player);
 }
 
@@ -272,12 +301,14 @@ void IteratorTile::landOn(Player* player, Game* game) {
     // 检查迭代器卡 — 玩家可选择使用卡片传送
     if (player->hasEffectCard(EffectCardType::ITERATOR_CARD)) {
         game->logEvent(player->name() + " 到达迭代器格 " + m_name + "，可使用迭代器卡传送");
+        game->setWaitingForDecision(true);
         emit game->promptIteratorCard(player, m_index);
         return;
     }
 
     // 无迭代器卡，正常流程
     if (m_owner == nullptr) {
+        game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
     } else if (m_owner != player && !m_owner->isBankrupt()) {
         int rent = calculateRent();
@@ -301,6 +332,7 @@ UtilityTile::UtilityTile(const TileDef& def, int index)
 
 void UtilityTile::landOn(Player* player, Game* game) {
     if (m_owner == nullptr) {
+        game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
     } else if (m_owner != player && !m_owner->isBankrupt()) {
         int diceTotal = game->lastDiceTotal();
@@ -326,6 +358,7 @@ RailroadTile::RailroadTile(const TileDef& def, int index)
 
 void RailroadTile::landOn(Player* player, Game* game) {
     if (m_owner == nullptr) {
+        game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
     } else if (m_owner != player && !m_owner->isBankrupt()) {
         int rent = calculateRent();

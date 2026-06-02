@@ -238,25 +238,30 @@ void MainWindow::onNewGame() {
 void MainWindow::onRules() {
     QString rules =
         "=== 大富翁 游戏规则 ===\n\n"
-        "1. 轮流掷两颗骰子，按点数前进\n"
-        "2. 停在无人拥有的地产上可以购买\n"
-        "3. 停在他人地产上需要支付租金\n"
-        "4. 拥有同色全部地产后可以建造房屋和旅馆\n"
-        "5. 经过或停在起点可获得奖金\n"
-        "6. 掷出对子（两颗骰子点数相同）可以再掷一次\n"
-        "7. 走到问答格需回答C++选择题，答对大概率得效果卡\n"
-        "8. 走到商店可购买效果卡，商店入口可选择是否进入\n"
-        "9. 走到上机课需答题且跳过下一回合，答对必得效果卡\n"
-        "10. 最后一位未破产的玩家获胜！\n\n"
-        "效果卡类型：\n"
-        "  • 再丢一次骰子 — 重掷骰子\n"
-        "  • 万能骰子 — 自选骰子点数(1-6)\n"
-        "  • 虚函数卡 — 在虚函数格上选择基类/派生类行为\n"
-        "  • 跳过卡 — 跳过当前地块的负面效果\n"
-        "  • 迭代器卡 — 在迭代器格之间传送（++/--/+=2/-=2）\n\n"
-        "地产颜色组（成套仅影响租金加成）：\n"
-        "  棕色(2块) → 浅蓝(3块) → 粉色(3块) → 橙色(3块)\n"
-        "  → 红色(3块) → 黄色 → 绿色 → 深蓝(2块)";
+        "【基本规则】\n"
+        "1. 2~4名玩家轮流掷两颗骰子，按点数前进\n"
+        "2. 初始资金 ¥20,000，经过起点 +¥5,000（停留 +¥10,000）\n"
+        "3. 停在无主地产/设施上可购买，停在他人地产上需支付租金\n"
+        "4. 拥有同色全部地产后，踩中自己地产时可建造房屋和旅馆\n"
+        "5. 掷出对子（两颗骰子点数相同）获得额外一个回合\n"
+        "6. 付不起租金时宣告破产，最后一位未破产的玩家获胜\n\n"
+        "【功能格】\n"
+        "  • 问答格(?) — 回答C++选择题，答对概率获得效果卡\n"
+        "  • 商店(¥) — 使用金币购买效果卡\n"
+        "  • 商店入口(>>) — 可选择是否传送到商店\n"
+        "  • 上机课(PC) — 答题+跳过下回合，答对必得效果卡\n"
+        "  • 税收格 — 强制消费（农园¥2,000 / 燕南¥3,000）\n\n"
+        "【效果卡】可在商店购买或通过答题获取：\n"
+        "  • 再丢一次 — 掷骰后可再掷一次\n"
+        "  • 万能骰子 — 自选两个骰子点数(1-6)\n"
+        "  • 虚函数卡 — 配合虚函数格使用\n"
+        "  • 跳过卡   — 跳过当前格的负面效果\n"
+        "  • 迭代器卡 — 配合迭代器格使用\n\n"
+        "【特殊地块】\n"
+        "棋盘上有虚函数格、静态成员变量格、迭代器格等特殊地块，\n"
+        "其价格、租金计算机制均模拟对应的C++概念。\n"
+        "点击格子上方的 [i] 按钮阅读伪代码，理解其运作方式。\n"
+        "善用效果卡与地块机制的配合，是取胜的关键！";
     QMessageBox::information(this, "游戏规则", rules);
 }
 
@@ -511,9 +516,11 @@ void MainWindow::onPlayerUpdated(Player* player) {
 // ==================== 非模态弹窗辅助 ====================
 QDialog* MainWindow::createBoardDialog(const QString& title) {
     m_diceWidget->setRollEnabled(false);
-    QDialog* dlg = new QDialog(this, Qt::WindowStaysOnTopHint);
+    QDialog* dlg = new QDialog(this);
+    dlg->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog | Qt::WindowStaysOnTopHint);
     dlg->setWindowTitle(title);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->setStyleSheet("QDialog { border: 3px solid #8F1A10; border-radius: 8px; background: #FFF8F0; }");
     return dlg;
 }
 
@@ -977,50 +984,140 @@ void MainWindow::onPromptVirtualFuncBuy(Player* player, int tileIndex,
     positionOnBoard(dlg);
 }
 
-void MainWindow::onPromptVirtualFuncRent(Player* player, int tileIndex,
-                                          int baseRent, int derivedRent) {
-    if (!m_game || !player) return;
+void MainWindow::onPromptVirtualFuncRent(Player* payer, int tileIndex,
+                                          Player* owner, int baseRent, int derivedRent) {
+    if (!m_game || !payer || !owner) return;
 
     Tile* t = m_game->board().tileAt(tileIndex);
     if (!t) return;
 
     auto* vt = dynamic_cast<VirtualfuncTile*>(t);
-    QString ownerName = vt ? (vt->owner() ? vt->owner()->name() : "?") : "?";
+    if (!vt) return;
 
-    QString msg = player->name() + "，你停在 " + ownerName + " 的虚函数格 " + t->name() + "！\n\n"
-                  "🏠 基类租金：¥" + QString::number(baseRent) + "（固定、安全）\n"
-                  "🔀 派生类租金：¥" + QString::number(derivedRent) + "（需消耗虚函数卡）\n\n"
-                  "当前资金：¥" + QString::number(player->money());
+    bool isPure = vt->rentIsPureVirtual();
+    bool isNonVirtual = vt->rentIsNonVirtual();
 
-    QDialog* dlg = createBoardDialog("虚函数卡 — 支付租金");
+    QDialog* dlg = createBoardDialog("虚函数卡 — 收租选择");
     auto* layout = new QVBoxLayout(dlg);
-    layout->addWidget(new QLabel(msg, dlg));
-
     auto* btnLayout = new QHBoxLayout();
-    QPushButton* baseBtn = new QPushButton("基类付租 (¥" + QString::number(baseRent) + ")", dlg);
-    baseBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
-    btnLayout->addWidget(baseBtn);
-    QPushButton* derivedBtn = new QPushButton("派生类付租 (¥" + QString::number(derivedRent) + ")", dlg);
-    derivedBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
-    btnLayout->addWidget(derivedBtn);
-    QPushButton* cancelBtn = new QPushButton("跳过", dlg);
-    cancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
-    btnLayout->addWidget(cancelBtn);
+
+    if (isPure) {
+        // Pure: 纯虚函数，基类租金不可用，仅派生类
+        QString msg = owner->name() + "，玩家 " + payer->name()
+                      + " 踩中了你的虚函数格 " + t->name() + "！\n\n"
+                      "⚠️ 该格租金为纯虚函数，基类租金不可用。\n"
+                      "🔀 派生类租金：¥" + QString::number(derivedRent) + "（需消耗虚函数卡）\n\n"
+                      "当前资金：¥" + QString::number(owner->money());
+
+        QLabel* label = new QLabel(msg, dlg);
+        label->setWordWrap(true);
+        layout->addWidget(label);
+
+        QPushButton* derivedBtn = new QPushButton(
+            "使用派生类收租 (¥" + QString::number(derivedRent) + ")", dlg);
+        derivedBtn->setStyleSheet(
+            "QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(derivedBtn);
+
+        QPushButton* cancelBtn = new QPushButton("放弃收租", dlg);
+        cancelBtn->setStyleSheet(
+            "QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(cancelBtn);
+
+        connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->accept();
+            m_game->payRentVirtualFunc(payer, tileIndex, true);
+        });
+        connect(cancelBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->reject();
+            m_game->handlePureVirtualNoRent(payer, tileIndex);
+        });
+    } else if (isNonVirtual) {
+        // Mix1: 租金为非虚函数，卡无效，但仍给选择（教学效果）
+        QString msg = owner->name() + "，玩家 " + payer->name()
+                      + " 踩中了你的虚函数格 " + t->name() + "！\n\n"
+                      "🏠 基类租金：¥" + QString::number(baseRent) + "（固定、安全，不消耗卡）\n"
+                      "⚠️ 派生类租金：¥" + QString::number(derivedRent) + "\n"
+                      "⚠️ 该格租金为非虚函数，使用虚函数卡无效！\n\n"
+                      "当前资金：¥" + QString::number(owner->money());
+
+        QLabel* label = new QLabel(msg, dlg);
+        label->setWordWrap(true);
+        layout->addWidget(label);
+
+        QPushButton* baseBtn = new QPushButton(
+            "基类收租 (¥" + QString::number(baseRent) + ")", dlg);
+        baseBtn->setStyleSheet(
+            "QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(baseBtn);
+
+        QPushButton* derivedBtn = new QPushButton(
+            "派生类收租 (¥" + QString::number(derivedRent) + ")", dlg);
+        derivedBtn->setStyleSheet(
+            "QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(derivedBtn);
+
+        QPushButton* cancelBtn = new QPushButton("跳过", dlg);
+        cancelBtn->setStyleSheet(
+            "QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(cancelBtn);
+
+        connect(baseBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->accept();
+            m_game->payRentVirtualFunc(payer, tileIndex, false);
+        });
+        connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->accept();
+            m_game->payRentVirtualFunc(payer, tileIndex, true);
+        });
+        connect(cancelBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->reject();
+            m_game->payRentVirtualFunc(payer, tileIndex, false);
+        });
+    } else {
+        // 正常虚函数格 (Buy/Rent/Mix2)
+        QString msg = owner->name() + "，玩家 " + payer->name()
+                      + " 踩中了你的虚函数格 " + t->name() + "！\n\n"
+                      "🏠 基类租金：¥" + QString::number(baseRent) + "（固定、安全，不消耗卡）\n"
+                      "🔀 派生类租金：¥" + QString::number(derivedRent) + "（需消耗虚函数卡）\n\n"
+                      "当前资金：¥" + QString::number(owner->money());
+
+        QLabel* label = new QLabel(msg, dlg);
+        label->setWordWrap(true);
+        layout->addWidget(label);
+
+        QPushButton* baseBtn = new QPushButton(
+            "基类收租 (¥" + QString::number(baseRent) + ")", dlg);
+        baseBtn->setStyleSheet(
+            "QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(baseBtn);
+
+        QPushButton* derivedBtn = new QPushButton(
+            "派生类收租 (¥" + QString::number(derivedRent) + ")", dlg);
+        derivedBtn->setStyleSheet(
+            "QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(derivedBtn);
+
+        QPushButton* cancelBtn = new QPushButton("跳过", dlg);
+        cancelBtn->setStyleSheet(
+            "QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+        btnLayout->addWidget(cancelBtn);
+
+        connect(baseBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->accept();
+            m_game->payRentVirtualFunc(payer, tileIndex, false);
+        });
+        connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->accept();
+            m_game->payRentVirtualFunc(payer, tileIndex, true);
+        });
+        connect(cancelBtn, &QPushButton::clicked, this, [this, dlg, payer, tileIndex]() {
+            dlg->reject();
+            m_game->payRentVirtualFunc(payer, tileIndex, false);
+        });
+    }
+
     layout->addLayout(btnLayout);
-
-    connect(baseBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
-        dlg->accept();
-        m_game->payRentVirtualFunc(player, tileIndex, false);
-    });
-    connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
-        dlg->accept();
-        m_game->payRentVirtualFunc(player, tileIndex, true);
-    });
-    connect(cancelBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
-        dlg->reject();
-        m_game->payRentVirtualFunc(player, tileIndex, false);
-    });
-
     dlg->show();
     positionOnBoard(dlg);
 }

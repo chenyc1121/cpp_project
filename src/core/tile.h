@@ -27,6 +27,7 @@ public:
     virtual int price() const { return m_price; }
     QString titleBarText() const { return m_titleBarText; }
     QString infoText() const { return m_infoText; }
+    QString titleDetail() const { return m_titleDetail.isEmpty() ? m_titleBarText : m_titleDetail; }
 
 protected:
     int m_index;            // 在地图上的索引 (0-27)
@@ -36,6 +37,7 @@ protected:
     int m_price;            // 购买价格
     QString m_titleBarText; // 标题栏显示文字
     QString m_infoText;     // 详情按钮弹窗文字
+    QString m_titleDetail;  // [i] 按钮弹窗文字（空则回退到 titleBarText）
 };
 
 
@@ -60,6 +62,8 @@ public:
     int houses() const { return m_houses; }
     bool hasHotel() const { return m_hasHotel; }
     int houseCost() const { return m_houseCost; }
+    int baseRent() const { return m_rentTable[0]; }
+    int rentAtLevel(int level) const { return m_rentTable[level]; }  // 0=空地, 1-4=1-4栋, 5=旅馆
     int mortgageValue() const { return m_price / 2; }
 
     // 建造/升级
@@ -110,6 +114,8 @@ public:
     int ratio() const { return m_ratio; }
     int buyDecay() const { return m_buyDecay; }
     int rentDecay() const { return m_rentDecay; }
+    bool rentIsPureVirtual() const { return m_rentIsPureVirtual; }
+    bool rentIsNonVirtual() const { return m_rentIsNonVirtual; }
 
 private:
     int m_ratio;      // 收租时基于owner资产的比例
@@ -117,6 +123,8 @@ private:
     int m_rentRatio;  // 收租比例（百分比）
     int m_buyDecay;   // 买入价格减免
     int m_rentDecay;  // 收租减免
+    bool m_rentIsPureVirtual = false;  // rent_price() 纯虚函数
+    bool m_rentIsNonVirtual  = false;  // rent_price() 非虚函数
 };
 
 // ==================== 问答格 ====================

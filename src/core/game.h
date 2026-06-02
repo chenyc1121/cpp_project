@@ -47,6 +47,8 @@ public:
     int lastDie1() const { return m_lastDie1; }
     int lastDie2() const { return m_lastDie2; }
 
+    void setWaitingForDecision(bool w) { m_waitingForDecision = w; }
+
     // === 回合流程 ===
     void rollDice();
     void debugRollDice(int die1, int die2);
@@ -71,7 +73,8 @@ public:
     // === 虚函数卡 ===
     void buyPropertyVirtualFunc(Player* player, int tileIndex, bool useDerived);
     void buildHouseVirtualFunc(Player* player, int tileIndex, bool useDerived);
-    void payRentVirtualFunc(Player* player, int tileIndex, bool useDerived);
+    void payRentVirtualFunc(Player* payer, int tileIndex, bool useDerived);
+    void handlePureVirtualNoRent(Player* payer, int tileIndex);
 
     // === 迭代器卡 ===
     void useIteratorCard(Player* player, int fromTileIndex,
@@ -115,7 +118,7 @@ signals:
 
     // 虚函数卡相关信号
     void promptVirtualFuncBuy(Player* player, int tileIndex, int basePrice, int derivedPrice);
-    void promptVirtualFuncRent(Player* player, int tileIndex, int baseRent, int derivedRent);
+    void promptVirtualFuncRent(Player* payer, int tileIndex, Player* owner, int baseRent, int derivedRent);
     void promptVirtualFuncBuild(Player* player, int tileIndex, int baseCost, int derivedCost);
 
 private slots:

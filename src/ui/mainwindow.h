@@ -43,7 +43,7 @@ private slots:
 
     // 虚函数卡
     void onPromptVirtualFuncBuy(Player* player, int tileIndex, int basePrice, int derivedPrice);
-    void onPromptVirtualFuncRent(Player* player, int tileIndex, int baseRent, int derivedRent);
+    void onPromptVirtualFuncRent(Player* payer, int tileIndex, Player* owner, int baseRent, int derivedRent);
     void onPromptVirtualFuncBuild(Player* player, int tileIndex, int baseCost, int derivedCost);
 
     // 状态更新

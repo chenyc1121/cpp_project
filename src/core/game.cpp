@@ -514,9 +514,8 @@ void Game::goToShop(Player* player) {
 void Game::declineShopEntrance() {
     Player* player = currentPlayer();
     logEvent(player->name() + " 选择不进入商店。");
-    if (!m_waitingForDecision) {
-        endTurn();
-    }
+    m_waitingForDecision = false;
+    endTurn();
 }
 
 
@@ -586,29 +585,47 @@ void Game::buildHouseVirtualFunc(Player* player, int tileIndex, bool useDerived)
     endTurn();
 }
 
-void Game::payRentVirtualFunc(Player* player, int tileIndex, bool useDerived) {
+void Game::payRentVirtualFunc(Player* payer, int tileIndex, bool useDerived) {
     auto* vt = dynamic_cast<VirtualfuncTile*>(m_board->tileAt(tileIndex));
     if (!vt) return;
 
     Player* owner = vt->owner();
-    if (!owner || owner == player || owner->isBankrupt()) return;
+    if (!owner || owner == payer || owner->isBankrupt()) return;
 
-    int rent = useDerived ? vt->VirtualfuncTile::calculateRent() : vt->PropertyTile::calculateRent();
-
+    int rent;
     if (useDerived) {
-        player->useEffectCard(EffectCardType::VIRTUAL_FUNCTION);
+        // 地主消耗虚函数卡
+        owner->useEffectCard(EffectCardType::VIRTUAL_FUNCTION);
+
+        if (vt->rentIsNonVirtual()) {
+            // Mix1: 租金为非虚函数，卡白花，租金走基类
+            rent = vt->PropertyTile::calculateRent();
+            logEvent(owner->name() + " 使用了虚函数卡，但 " + vt->name()
+                     + " 的租金为非虚函数，虚函数卡无效！");
+        } else {
+            rent = vt->VirtualfuncTile::calculateRent();
+        }
+    } else {
+        rent = vt->PropertyTile::calculateRent();
     }
 
-    QString msg = player->name() + " 停在 " + vt->name()
+    QString msg = payer->name() + " 停在 " + vt->name()
                   + "（属于" + owner->name() + "），"
                   + (useDerived ? "使用派生类租金" : "使用基类租金")
                   + "，支付 " + QString::number(rent) + " 元";
     logEvent(msg);
-    player->payMoneyTo(rent, owner, this);
+    payer->payMoneyTo(rent, owner, this);
     m_waitingForDecision = false;
     endTurn();
 }
 
+void Game::handlePureVirtualNoRent(Player* payer, int tileIndex) {
+    Q_UNUSED(payer)
+    Q_UNUSED(tileIndex)
+    // logEvent 已在 VirtualfuncTile::landOn() 中调用
+    m_waitingForDecision = false;
+    endTurn();
+}
 
 // ==================== 迭代器卡 ====================
 int Game::computeIteratorTarget(int fromIndex, IteratorOp op) const {
