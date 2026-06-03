@@ -58,7 +58,7 @@ QRect BoardWidget::tileRect(int tileIndex) const {
     if (tileIndex == 0)  return QRect(m, m + last * cell, cell, cell);           // 左下角（起点）
     if (tileIndex == 7)  return QRect(m + last * cell, m + last * cell, cell, cell); // 右下角（商店）
     if (tileIndex == 14) return QRect(m + last * cell, m, cell, cell);               // 右上角（上机课）
-    if (tileIndex == 21) return QRect(m, m, cell, cell);                             // 左上角（29楼地下室）
+    if (tileIndex == 21) return QRect(m, m, cell, cell);                             // 左上角（商店入口）
 
     // 底边: 1-6，从左到右
     if (tileIndex <= 6)
@@ -455,7 +455,7 @@ void BoardWidget::mousePressEvent(QMouseEvent* event) {
             info += "\n类型: 上机课";
             info += "\n答对C++题可获得效果卡，但需跳过下回合";
         } else if (t->type() == TileType::SHOP_ENTRANCE) {
-            info += "\n类型: 29楼地下室";
+            info += "\n类型: 商店入口";
             info += "\n可选择是否进入商店购物";
         }
         QToolTip::showText(event->globalPosition().toPoint(), info, this);
