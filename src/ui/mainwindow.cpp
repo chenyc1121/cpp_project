@@ -30,14 +30,14 @@ MainWindow::MainWindow(QWidget* parent)
       m_playerPanel(new PlayerPanel(this)),
       m_diceWidget(new DiceWidget(this)),
       m_eventLog(new EventLog(this)),
-      m_statusLabel(new QLabel("欢迎来到大富翁！点击 游戏→新游戏 开始", this)),
+      m_statusLabel(new QLabel("欢迎来到程序设计实习大富翁！点击 游戏→新游戏 开始", this)),
       m_propertyArea(new QScrollArea(this)),
       m_propertyContent(new QWidget(this))
 {
     setupUI();
     setupMenuBar();
     resize(960, 800);
-    setWindowTitle("大富翁 Monopoly");
+    setWindowTitle("程设大富翁 mOnOPoly");
 }
 
 MainWindow::~MainWindow() {
@@ -248,7 +248,7 @@ void MainWindow::onRules() {
         "【功能格】\n"
         "  • 问答格(?) — 回答C++选择题，答对概率获得效果卡\n"
         "  • 商店(¥) — 使用金币购买效果卡\n"
-        "  • 商店入口(>>) — 可选择是否传送到商店\n"
+        "  • 29楼地下室(>>) — 可选择是否传送到商店\n"
         "  • 上机课(PC) — 答题+跳过下回合，答对必得效果卡\n"
         "  • 税收格 — 强制消费（农园¥2,000 / 燕南¥3,000）\n\n"
         "【效果卡】可在商店购买或通过答题获取：\n"
@@ -834,11 +834,11 @@ void MainWindow::onPromptShop(Player* player) {
 }
 
 
-// ==================== 商店入口 ====================
+// ==================== 29楼地下室 ====================
 void MainWindow::onPromptShopEntrance(Player* player) {
     if (!m_game || !player) return;
 
-    QDialog* dlg = createBoardDialog("商店入口");
+    QDialog* dlg = createBoardDialog("29楼地下室");
     auto* layout = new QVBoxLayout(dlg);
     layout->addWidget(new QLabel(
         player->name() + "，前方是商店！是否进入购买效果卡？", dlg));

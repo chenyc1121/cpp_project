@@ -489,12 +489,16 @@ void Game::buyEffectCard(Player* player, EffectCardType type) {
 void Game::buyEffectCard(Player* player, const EffectCard& card) {
     if (!player->canAfford(card.price)) {
         logEvent(player->name() + " 资金不足，无法购买！");
+        m_waitingForDecision = false;
+        endTurn();
         return;
     }
     player->payMoney(card.price, this);
     player->addEffectCard(card);
     logEvent(player->name() + " 购买了 " + card.name + "！");
     emit playerUpdated(player);
+    m_waitingForDecision = false;
+    endTurn();
 }
 
 void Game::goToShop(Player* player) {

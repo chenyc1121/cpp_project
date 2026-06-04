@@ -285,7 +285,7 @@ ShopEntranceTile::ShopEntranceTile(const TileDef& def, int index)
     : Tile(def, index) {}
 
 void ShopEntranceTile::landOn(Player* player, Game* game) {
-    game->logEvent(player->name() + " 经过商店入口");
+    game->logEvent(player->name() + " 经过29楼地下室");
     game->setWaitingForDecision(true);
     emit game->promptShopEntrance(player);
 }

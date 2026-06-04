@@ -80,7 +80,7 @@ constexpr int QA_CARD_CHANCE_PERCENT = 65;
 
 // ==================== 棋盘布局定义（28格） ====================
 // 布局：4个角格 + 每条边6个中间格 = 28格
-// 角格：0(起点), 7(商店), 14(上机课), 21(商店入口)
+// 角格：0(起点), 7(商店), 14(上机课), 21(29楼地下室)
 
 const QVector<TileDef> BOARD_LAYOUT = {
     // 底部边 (索引 0-6)
@@ -110,7 +110,7 @@ const QVector<TileDef> BOARD_LAYOUT = {
     {TileType::TAX,         "燕南",       ColorGroup::NONE,       3000,   0,      0,      0,      0,      0,      0,      0,      "食堂",     "来都来了，吃了饭再走吧。停留在这个格子会花掉¥3000。"},
     {TileType::ITERATOR,    "理教",     ColorGroup::NONE,       2000,   250,    0,      0,      0,      0,      0,      0,      "迭代器格", "pos=2;\nauto now_pos=it+pos\n\n拥有迭代器卡时，可根据迭代器卡的类型和当前位置选择执行：\nnow_pos++| now_pos--|now_pos+=2| now_pos-=2", "vector<Tile> location = {\"三教\", \"二教\", \"理教\",\"一教\"};\nauto it = location.begin();"},
     // 右边边 (索引 21-27)
-    {TileType::SHOP_ENTRANCE,"商店入口",    ColorGroup::NONE,       0,      0,      0,      0,      0,      0,      0,      0,      "商店入口", "前方是商店！\n你可以选择是否进入商店购买效果卡。\n进入：移动到商店格，浏览并购买卡片。\n不进入：停留原地，无效果。"},
+    {TileType::SHOP_ENTRANCE,"29楼地下室",    ColorGroup::NONE,       0,      0,      0,      0,      0,      0,      0,      0,      "29楼地下室", "前方是商店！\n你可以选择是否进入商店购买效果卡。\n进入：移动到商店格，浏览并购买卡片。\n不进入：停留原地，无效果。"},
     {TileType::PROPERTY,    "博雅塔",       ColorGroup::ORANGE,     2600,   220,    600,    1300,   2900,   3400,   4000,   1400,   "橙色组",   "博雅塔 — 橙色组地产。\n购买后可收取租金。可建造房屋/旅馆；拥有全部橙色组地产后租金翻倍。\n\n"},
     {TileType::QA,          "问答格",       ColorGroup::NONE,       0,      0,      0,      0,      0,      0,      0,      0,      "问答",     "回答一道C++面向对象选择题。\n答对后有概率获得效果卡。\n答错无惩罚。"},
     {TileType::VIRTUALFUNC, "Mix2",     ColorGroup::NONE,       2000,   160,    440,    1050,   2300,   2700,   3200,   1200,   "虚函数格", "class Mix1:public VirtualfuncTile{\n int buy_price(){\nreturn get_price()*1.1;\n}\nint rent_price(){\nreturn get_rent()*0.9;\n}\n}", "class VirtualfuncTile:{\nvirtual int buy_price(){\nreturn get_price();\n}\nvirtual int rent_price(){\nreturn get_rent();\n}\n}", 0, 110, 90, 0, 0, false, false},
