@@ -418,18 +418,21 @@ void Game::onCardDecision(EffectCardType cardType, bool used) {
     case EffectCardType::ROLL_AGAIN:
         if (player->useEffectCard(EffectCardType::ROLL_AGAIN)) {
             logEvent(player->name() + " 使用了'再丢一次骰子'卡！");
+            emit playerUpdated(player);
             m_dice->roll();
         }
         return;
     case EffectCardType::SKIP_EFFECT:
         if (player->useEffectCard(EffectCardType::SKIP_EFFECT)) {
             logEvent(player->name() + " 使用了'跳过卡'，跳过了地块效果！");
+            emit playerUpdated(player);
         }
         endTurn();
         return;
     case EffectCardType::VIRTUAL_FUNCTION:
         if (player->useEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
             logEvent(player->name() + " 使用了'虚函数卡'（效果待实现）");
+            emit playerUpdated(player);
         }
         proceedAfterCardDecision();
         return;
@@ -448,6 +451,8 @@ void Game::proceedAfterCardDecision() {
 void Game::setUniversalDice(int die1, int die2) {
     Player* player = currentPlayer();
     if (!player->useEffectCard(EffectCardType::UNIVERSAL_DICE)) return;
+
+    emit playerUpdated(player);
 
     logEvent(player->name() + QString(" 使用了万能骰子：%1 + %2 = %3")
              .arg(die1).arg(die2).arg(die1 + die2));
@@ -687,6 +692,7 @@ void Game::useIteratorCard(Player* player, int fromTileIndex,
         // 不支持的操作：卡片已消耗，但没有效果
         logEvent(player->name() + QString(" 使用了迭代器卡(%1)的 %2 操作，但此操作不被支持！卡片被消耗，无效果。")
                  .arg(subName).arg(opName));
+        emit playerUpdated(player);
         m_waitingForDecision = false;
         endTurn();
         return;
@@ -696,6 +702,7 @@ void Game::useIteratorCard(Player* player, int fromTileIndex,
     if (target < 0) {
         logEvent(player->name() + QString(" 使用了迭代器卡(%1)的 %2 操作，但迭代器越界！卡片被消耗，无效果。")
                  .arg(subName).arg(opName));
+        emit playerUpdated(player);
         m_waitingForDecision = false;
         endTurn();
         return;
