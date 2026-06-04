@@ -43,11 +43,13 @@ StartTile::StartTile(const TileDef& def, int index)
 void StartTile::landOn(Player* player, Game* game) {
     player->receiveMoney(START_BONUS * 2);
     game->logEvent(player->name() + QString(" 停在起点，获得奖金 %1 元！").arg(START_BONUS * 2));
+    emit game->playerUpdated(player);
 }
 
 void StartTile::passBy(Player* player, Game* game) {
     player->receiveMoney(START_BONUS);
     game->logEvent(player->name() + QString(" 经过起点，获得 %1 元").arg(START_BONUS));
+    emit game->playerUpdated(player);
 }
 
 
@@ -78,6 +80,8 @@ void PropertyTile::landOn(Player* player, Game* game) {
                       + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元";
         game->logEvent(msg);
         player->payMoneyTo(rent, m_owner, game);
+        emit game->playerUpdated(player);
+        emit game->playerUpdated(m_owner);
     }
 }
 
@@ -188,6 +192,8 @@ void VirtualfuncTile::landOn(Player* player, Game* game) {
                        + "（属于" + owner->name() + "），支付租金 "
                        + QString::number(rent) + " 元");
         payer->payMoneyTo(rent, owner, game);
+        emit game->playerUpdated(payer);
+        emit game->playerUpdated(owner);
     }
 }
 
@@ -254,6 +260,7 @@ TaxTile::TaxTile(const TileDef& def, int index)
 void TaxTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 花掉了" + QString::number(m_price) + " 元，吃成了大卫戴！");
     player->payMoney(m_price, game);
+    emit game->playerUpdated(player);
 }
 
 
@@ -315,6 +322,8 @@ void IteratorTile::landOn(Player* player, Game* game) {
         game->logEvent(player->name() + " 到达迭代器格" + m_name
                        + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元");
         player->payMoneyTo(rent, m_owner, game);
+        emit game->playerUpdated(player);
+        emit game->playerUpdated(m_owner);
     }
 }
 
@@ -340,6 +349,8 @@ void UtilityTile::landOn(Player* player, Game* game) {
         game->logEvent(player->name() + " 使用" + m_name
                        + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元");
         player->payMoneyTo(rent, m_owner, game);
+        emit game->playerUpdated(player);
+        emit game->playerUpdated(m_owner);
     }
 }
 
@@ -365,6 +376,8 @@ void RailroadTile::landOn(Player* player, Game* game) {
         game->logEvent(player->name() + " 乘坐" + m_name
                        + "（属于" + m_owner->name() + "），支付车费 " + QString::number(rent) + " 元");
         player->payMoneyTo(rent, m_owner, game);
+        emit game->playerUpdated(player);
+        emit game->playerUpdated(m_owner);
     }
 }
 

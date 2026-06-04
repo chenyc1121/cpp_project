@@ -619,6 +619,8 @@ void Game::payRentVirtualFunc(Player* payer, int tileIndex, bool useDerived) {
                   + "，支付 " + QString::number(rent) + " 元";
     logEvent(msg);
     payer->payMoneyTo(rent, owner, this);
+    emit playerUpdated(payer);
+    emit playerUpdated(owner);
     m_waitingForDecision = false;
     endTurn();
 }
@@ -732,6 +734,8 @@ void Game::declineIteratorCard() {
             logEvent(player->name() + " 到达迭代器格" + it->name()
                      + "（属于" + it->owner()->name() + "），支付租金 " + QString::number(rent) + " 元");
             player->payMoneyTo(rent, it->owner(), this);
+            emit playerUpdated(player);
+            emit playerUpdated(it->owner());
         }
     }
 
