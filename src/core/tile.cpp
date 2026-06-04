@@ -177,7 +177,7 @@ void VirtualfuncTile::landOn(Player* player, Game* game) {
         // Case 2: 地主有卡 → 弹窗让地主选择基类/派生类
         if (owner->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
             int baseRent = PropertyTile::calculateRent();
-            int derivedRent = VirtualfuncTile::calculateRent();
+            int derivedRent = calculateRentForPayer(payer);
             game->logEvent(payer->name() + " 停在虚函数格 " + m_name
                            + "（属于" + owner->name() + "），"
                            + owner->name() + " 可选择基类/派生类租金");
@@ -211,6 +211,21 @@ int VirtualfuncTile::calculateRent(int) const {
     int rent = m_rentTable[level] * m_rentRatio / 100 - m_rentDecay;
     if (m_owner) {
         rent += m_owner->money() * m_ratio / 100;
+    }
+    if (rent < 0) rent = 0;
+    return rent;
+}
+
+int VirtualfuncTile::calculateRentForPayer(Player* payer) const {
+    int level = 0;
+    if (m_hasHotel) {
+        level = 5;
+    } else {
+        level = qBound(0, m_houses, 4);
+    }
+    int rent = m_rentTable[level] * m_rentRatio / 100 - m_rentDecay;
+    if (payer) {
+        rent += payer->money() * m_ratio / 100;
     }
     if (rent < 0) rent = 0;
     return rent;

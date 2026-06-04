@@ -278,10 +278,9 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
 
         if (owner) {
             painter.setPen(owner->color().darker(150));
-            int rent = pt ? pt->calculateRent() : (it_tile ? it_tile->calculateRent() : 0);
             painter.drawText(rect.adjusted(1, 0, -1, -2),
                              Qt::AlignBottom | Qt::AlignHCenter,
-                             "¥" + QString::number(rent > 0 ? rent : price));
+                             "¥" + QString::number(price));
         } else {
             painter.setPen(QColor(0,0,0));
             painter.drawText(rect.adjusted(1, 0, -1, -2),
@@ -409,7 +408,6 @@ void BoardWidget::mousePressEvent(QMouseEvent* event) {
             info += "\n  旅馆: ¥" + QString::number(pt->rentAtLevel(5));
             if (pt->owner()) {
                 info += "\n\n所有者: " + pt->owner()->name();
-                info += "\n当前租金: ¥" + QString::number(pt->calculateRent());
                 if (pt->houses() > 0)
                     info += "\n房屋: " + QString::number(pt->houses()) + " 栋";
                 if (pt->hasHotel())

@@ -107,6 +107,7 @@ public:
 
     int price() const override;
     int calculateRent(int diceValue = 0) const override;
+    int calculateRentForPayer(Player* payer) const;
     void buildHouse() override;
 
     int buyRatio() const { return m_buyRatio; }

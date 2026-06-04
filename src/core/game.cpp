@@ -607,7 +607,7 @@ void Game::payRentVirtualFunc(Player* payer, int tileIndex, bool useDerived) {
             logEvent(owner->name() + " 使用了虚函数卡，但 " + vt->name()
                      + " 的租金为非虚函数，虚函数卡无效！");
         } else {
-            rent = vt->VirtualfuncTile::calculateRent();
+            rent = vt->calculateRentForPayer(payer);
         }
     } else {
         rent = vt->PropertyTile::calculateRent();

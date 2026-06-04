@@ -89,7 +89,7 @@ const QVector<TileDef> BOARD_LAYOUT = {
     {TileType::PROPERTY,    "45甲",         ColorGroup::BROWN,      1200,   80,     220,    600,    1400,   1700,   2000,   800,    "棕色组",   "45甲 — 棕色组地产。\n购买后可收取租金。可建造房屋/旅馆；拥有全部棕色组地产后租金翻倍。\n\n"},
     {TileType::QA,          "问答格",       ColorGroup::NONE,       0,      0,      0,      0,      0,      0,      0,      0,      "问答",     "回答一道C++面向对象选择题。\n答对后有概率获得效果卡（再丢一次骰子、万能骰子、虚函数卡、跳过卡）。\n答错无惩罚。\n\n用你的程设知识赢取优势！"},
     {TileType::PROPERTY,    "35楼",       ColorGroup::LIGHT_BLUE, 1600,   120,    360,    850,    1900,   2300,   2700,   1000,   "浅蓝组",   "35楼 — 浅蓝组地产。\n购买后可收取租金。可建造房屋/旅馆；拥有全部浅蓝组地产后租金翻倍。\n\n"},
-    {TileType::TAX,         "农园",       ColorGroup::NONE,       2000,   0,      0,      0,      0,      0,      0,      0,      "食堂",     "来都来了，吃了饭再走吧。停留在这个格子会花掉¥2000。"},
+    {TileType::TAX,         "农园",       ColorGroup::NONE,       2000,   0,      0,      0,      0,      0,      0,      0,      "食堂",     "来都来了，吃了饭再走吧。停留在这个格子会花掉¥2000。这里有温馨的经济窗口，因此你不会因此破产"},
     {TileType::ITERATOR,    "三教",     ColorGroup::NONE,       2000,   250,    0,      0,      0,      0,      0,      0,      "迭代器格", "pos=0;\nauto now_pos=it+pos\n\n拥有迭代器卡时，可根据迭代器卡的类型和当前位置选择执行：\nnow_pos++| now_pos--|now_pos+=2| now_pos-=2", "vector<Tile> location = {\"三教\", \"二教\", \"理教\",\"一教\"};\nauto it = location.begin();"},
 
     // 左边边 (索引 7-13)
@@ -107,7 +107,7 @@ const QVector<TileDef> BOARD_LAYOUT = {
     {TileType::STATICVAL,   "静态成员变量·B", ColorGroup::YELLOW,   2200,   180,    500,    1100,   2500,   3000,   3500,   1000,   "静态变量", "int compute_cost(){\nif(count==3){\nreturn base_cost()+num_house*emptytile_cost\n}\n}\n\n", "class StaticvariableTile:{\nstatic int count;\nStaticvariableTile(){\ncount++;\n}\nint StaticvariableTile::count = 0;\n"},
     {TileType::QA,          "问答格",       ColorGroup::NONE,       0,      0,      0,      0,      0,      0,      0,      0,      "问答",     "回答一道C++面向对象选择题。\n答对后有概率获得效果卡。\n答错无惩罚。"},
     {TileType::STATICVAL,   "静态成员变量·C", ColorGroup::YELLOW,   2400,   200,    550,    1250,   2700,   3200,   3800,   1000,   "静态变量", "int compute_cost(){\nif(count==3){\nreturn base_cost()+num_house*emptytile_cost\n}\n}\n\n", "class StaticvariableTile:{\nstatic int count;\nStaticvariableTile(){\ncount++;\n}\nint StaticvariableTile::count = 0;\n"},
-    {TileType::TAX,         "燕南",       ColorGroup::NONE,       3000,   0,      0,      0,      0,      0,      0,      0,      "食堂",     "来都来了，吃了饭再走吧。停留在这个格子会花掉¥3000。"},
+    {TileType::TAX,         "燕南",       ColorGroup::NONE,       3000,   0,      0,      0,      0,      0,      0,      0,      "食堂",     "来都来了，吃了饭再走吧。停留在这个格子会花掉¥3000。这里有温馨的经济窗口，因此你不会因此破产"},
     {TileType::ITERATOR,    "理教",     ColorGroup::NONE,       2000,   250,    0,      0,      0,      0,      0,      0,      "迭代器格", "pos=2;\nauto now_pos=it+pos\n\n拥有迭代器卡时，可根据迭代器卡的类型和当前位置选择执行：\nnow_pos++| now_pos--|now_pos+=2| now_pos-=2", "vector<Tile> location = {\"三教\", \"二教\", \"理教\",\"一教\"};\nauto it = location.begin();"},
     // 右边边 (索引 21-27)
     {TileType::SHOP_ENTRANCE,"29楼地下室",    ColorGroup::NONE,       0,      0,      0,      0,      0,      0,      0,      0,      "29楼地下室", "前方是商店！\n你可以选择是否进入商店购买效果卡。\n进入：移动到商店格，浏览并购买卡片。\n不进入：停留原地，无效果。"},
