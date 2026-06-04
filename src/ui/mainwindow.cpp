@@ -1117,6 +1117,8 @@ void MainWindow::onPromptVirtualFuncRent(Player* payer, int tileIndex,
 
 void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
                                            int baseCost, int derivedCost) {
+    Q_UNUSED(baseCost)
+    Q_UNUSED(derivedCost)
     if (!m_game || !player) return;
 
     Tile* t = m_game->board().tileAt(tileIndex);
@@ -1127,13 +1129,11 @@ void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
 
     QString info;
     if (vt->houses() < 4) {
-        info = "升级 " + vt->name() + "？\n当前：" + QString::number(vt->houses()) + " 栋房子\n\n";
+        info = "升级 " + vt->name() + "？\n当前：" + QString::number(vt->houses()) + " 栋房子\n";
     } else {
-        info = "在 " + vt->name() + " 建造旅馆？\n\n";
+        info = "在 " + vt->name() + " 建造旅馆？\n";
     }
-
-    info += "🏠 基类建房费：¥" + QString::number(baseCost) + "\n"
-            "🔀 派生类建房费：¥" + QString::number(derivedCost) + "（需消耗虚函数卡）\n\n"
+    info += "（可使用虚函数卡选择建房方式）\n\n"
             "当前资金：¥" + QString::number(player->money());
 
     QDialog* dlg = createBoardDialog("虚函数卡 — 建房");
@@ -1141,25 +1141,24 @@ void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
     layout->addWidget(new QLabel(info, dlg));
 
     auto* btnLayout = new QHBoxLayout();
-    QPushButton* baseBtn = new QPushButton("基类建造 (¥" + QString::number(baseCost) + ")", dlg);
-    baseBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
-    btnLayout->addWidget(baseBtn);
-    QPushButton* derivedBtn = new QPushButton("派生类建造 (¥" + QString::number(derivedCost) + ")", dlg);
-    if (!player->canAfford(derivedCost)) derivedBtn->setEnabled(false);
-    derivedBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
-    btnLayout->addWidget(derivedBtn);
-    QPushButton* cancelBtn = new QPushButton("取消", dlg);
+    QPushButton* useCardBtn = new QPushButton("使用虚函数卡", dlg);
+    useCardBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(useCardBtn);
+    QPushButton* noCardBtn = new QPushButton("不用卡", dlg);
+    noCardBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    btnLayout->addWidget(noCardBtn);
+    QPushButton* cancelBtn = new QPushButton("放弃", dlg);
     cancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 12px;border:none;border-radius:4px;}");
     btnLayout->addWidget(cancelBtn);
     layout->addLayout(btnLayout);
 
-    connect(baseBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
-        dlg->accept();
-        m_game->buildHouseVirtualFunc(player, tileIndex, false);
-    });
-    connect(derivedBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+    connect(useCardBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
         dlg->accept();
         m_game->buildHouseVirtualFunc(player, tileIndex, true);
+    });
+    connect(noCardBtn, &QPushButton::clicked, this, [this, dlg, player, tileIndex]() {
+        dlg->accept();
+        m_game->buildHouseVirtualFunc(player, tileIndex, false);
     });
     connect(cancelBtn, &QPushButton::clicked, this, [this, dlg]() {
         dlg->reject();
@@ -1189,17 +1188,10 @@ void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
         return;
     }
 
-    // 构建卡片选择列表
+    // 构建卡片选择列表（仅显示卡名，不暴露支持的操作）
     QStringList cardNames;
     for (int idx : cardIndices) {
-        const EffectCard& card = player->effectCards()[idx];
-        QString ops;
-        IteratorSubtype sub = card.iterSubtype;
-        if (iteratorSubtypeSupports(sub, IteratorOp::INCREMENT)) ops += "++ ";
-        if (iteratorSubtypeSupports(sub, IteratorOp::DECREMENT)) ops += "-- ";
-        if (iteratorSubtypeSupports(sub, IteratorOp::PLUS_EQ_2)) ops += "+=2 ";
-        if (iteratorSubtypeSupports(sub, IteratorOp::MINUS_EQ_2)) ops += "-=2";
-        cardNames << card.name + " [支持: " + ops.trimmed() + "]";
+        cardNames << player->effectCards()[idx].name;
     }
 
     // Step 1: choose card
@@ -1226,7 +1218,7 @@ void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
     });
 
     connect(nextBtn, &QPushButton::clicked, this, [this, cardDlg, player, tileIndex,
-              cardIndices, cardNames, cardCombo]() {
+              cardIndices, cardCombo]() {
         int idx = cardCombo->currentIndex();
         if (idx < 0 || idx >= cardIndices.size()) {
             cardDlg->reject();
@@ -1239,12 +1231,12 @@ void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
 
         cardDlg->accept();
 
-        // Step 2: choose operation
+        // Step 2: choose operation（仅显示操作符，不解释含义）
         QDialog* opDlg = createBoardDialog("迭代器操作 — " + player->name());
         auto* oLayout = new QVBoxLayout(opDlg);
         oLayout->addWidget(new QLabel(
             player->name() + " 使用 " + subName + "\n请选择操作：", opDlg));
-        QStringList ops = {"++ (前进1格)", "-- (后退1格)", "+=2 (前进2格)", "-=2 (后退2格)"};
+        QStringList ops = {"++", "--", "+=2", "-=2"};
         QComboBox* opCombo = new QComboBox(opDlg);
         opCombo->addItems(ops);
         oLayout->addWidget(opCombo);
