@@ -66,6 +66,24 @@ PropertyTile::PropertyTile(const TileDef& def, int index)
 }
 
 void PropertyTile::landOn(Player* player, Game* game) {
+    if (player->isAI()) {
+        // AI 自动决策（延迟处理在 Game 方法中完成）
+        if (m_owner == nullptr) {
+            game->aiDecideBuyProperty(player, m_index);
+        } else if (m_owner == player) {
+            game->aiDecideBuildHouse(player, m_index);
+        } else if (!m_owner->isBankrupt()) {
+            int rent = calculateRent();
+            QString msg = player->name() + " 停在 " + m_name
+                          + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元";
+            game->logEvent(msg);
+            player->payMoneyTo(rent, m_owner, game);
+            emit game->playerUpdated(player);
+            emit game->playerUpdated(m_owner);
+        }
+        return;
+    }
+
     if (m_owner == nullptr) {
         game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
@@ -150,20 +168,41 @@ VirtualfuncTile::VirtualfuncTile(const TileDef& def, int index)
 }
 
 void VirtualfuncTile::landOn(Player* player, Game* game) {
+    // === 无主：购买（决策者是踩中方）===
     if (m_owner == nullptr) {
-        // 无主：提示购买
+        if (player->isAI()) {
+            game->aiDecideVirtualFuncBuy(player, m_index);
+            return;
+        }
         game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
-    } else if (m_owner == player) {
-        // 自己踩中：提示建房
+        return;
+    }
+
+    // === 自己踩中：建房（决策者是踩中方）===
+    if (m_owner == player) {
+        if (player->isAI()) {
+            game->aiDecideVirtualFuncBuild(player, m_index);
+            return;
+        }
         if (canBuildHouse(player)) {
             game->setWaitingForDecision(true);
             emit game->promptBuildHouse(m_index, player);
         }
-    } else if (!m_owner->isBankrupt()) {
-        // 别人踩中地主的地 —— 地主决定是否用虚函数卡
+        return;
+    }
+
+    // === 别人踩中：收租（决策者是地主）===
+    if (!m_owner->isBankrupt()) {
         Player* payer = player;
         Player* owner = m_owner;
+
+        if (owner->isAI()) {
+            game->aiDecideVirtualFuncRent(payer, m_index, owner);
+            return;
+        }
+
+        // 以下为人类地主逻辑（原有代码）
 
         // Case 1: 纯虚函数租金 + 地主无卡 → 无法收租
         if (m_rentIsPureVirtual && !owner->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
@@ -263,6 +302,10 @@ QATile::QATile(const TileDef& def, int index)
 
 void QATile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 停在问答格！");
+    if (player->isAI()) {
+        game->aiDecideQA(player, m_index);
+        return;
+    }
     game->setWaitingForDecision(true);
     emit game->promptQA(player, m_index);
 }
@@ -285,6 +328,10 @@ ShopTile::ShopTile(const TileDef& def, int index)
 
 void ShopTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 来到商店！");
+    if (player->isAI()) {
+        game->aiDecideShop(player);
+        return;
+    }
     game->setWaitingForDecision(true);
     emit game->promptShop(player);
 }
@@ -297,6 +344,10 @@ ComputerLabTile::ComputerLabTile(const TileDef& def, int index)
 void ComputerLabTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 进入上机课（计算机实验课），需回答一道题，下回合跳过！");
     player->setSkipNextTurn(true);
+    if (player->isAI()) {
+        game->aiDecideComputerLab(player);
+        return;
+    }
     game->setWaitingForDecision(true);
     emit game->promptComputerLab(player);
 }
@@ -308,6 +359,10 @@ ShopEntranceTile::ShopEntranceTile(const TileDef& def, int index)
 
 void ShopEntranceTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 经过29楼地下室");
+    if (player->isAI()) {
+        game->aiDecideShopEntrance(player);
+        return;
+    }
     game->setWaitingForDecision(true);
     emit game->promptShopEntrance(player);
 }
@@ -320,6 +375,12 @@ IteratorTile::IteratorTile(const TileDef& def, int index)
 }
 
 void IteratorTile::landOn(Player* player, Game* game) {
+    if (player->isAI()) {
+        // AI 不使用迭代器卡
+        game->aiDecideIteratorCard(player, m_index);
+        return;
+    }
+
     // 检查迭代器卡 — 玩家可选择使用卡片传送
     if (player->hasEffectCard(EffectCardType::ITERATOR_CARD)) {
         game->logEvent(player->name() + " 到达迭代器格 " + m_name + "，可使用迭代器卡传送");
@@ -355,6 +416,21 @@ UtilityTile::UtilityTile(const TileDef& def, int index)
     : Tile(def, index) {}
 
 void UtilityTile::landOn(Player* player, Game* game) {
+    if (player->isAI()) {
+        if (m_owner == nullptr) {
+            game->aiDecideBuyProperty(player, m_index);
+        } else if (m_owner != player && !m_owner->isBankrupt()) {
+            int diceTotal = game->lastDiceTotal();
+            int rent = calculateRent(diceTotal);
+            game->logEvent(player->name() + " 使用" + m_name
+                           + "（属于" + m_owner->name() + "），支付租金 " + QString::number(rent) + " 元");
+            player->payMoneyTo(rent, m_owner, game);
+            emit game->playerUpdated(player);
+            emit game->playerUpdated(m_owner);
+        }
+        return;
+    }
+
     if (m_owner == nullptr) {
         game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);
@@ -383,6 +459,20 @@ RailroadTile::RailroadTile(const TileDef& def, int index)
     : Tile(def, index) {}
 
 void RailroadTile::landOn(Player* player, Game* game) {
+    if (player->isAI()) {
+        if (m_owner == nullptr) {
+            game->aiDecideBuyProperty(player, m_index);
+        } else if (m_owner != player && !m_owner->isBankrupt()) {
+            int rent = calculateRent();
+            game->logEvent(player->name() + " 乘坐" + m_name
+                           + "（属于" + m_owner->name() + "），支付车费 " + QString::number(rent) + " 元");
+            player->payMoneyTo(rent, m_owner, game);
+            emit game->playerUpdated(player);
+            emit game->playerUpdated(m_owner);
+        }
+        return;
+    }
+
     if (m_owner == nullptr) {
         game->setWaitingForDecision(true);
         emit game->promptBuyProperty(m_index, player);

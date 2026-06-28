@@ -3,9 +3,25 @@
 #include "board.h"
 #include "game.h"
 
-Player::Player(const QString& name, const QColor& color, int id)
-    : m_id(id), m_name(name), m_color(color)
+Player::Player(const QString& name, const QColor& color, int id,
+               bool isAI, AIDifficulty aiDiff)
+    : m_id(id), m_name(name), m_color(color),
+      m_isAI(isAI), m_aiDifficulty(aiDiff)
 {
+    if (m_isAI) {
+        applyAIPreset(aiDiff);
+    }
+}
+
+void Player::applyAIPreset(AIDifficulty diff) {
+    auto preset = aiDifficultyPreset(diff);
+    m_money = preset.initialMoney;
+    for (int i = 0; i < preset.rollAgainCards; ++i)
+        addEffectCard(EffectCardType::ROLL_AGAIN);
+    for (int i = 0; i < preset.universalDiceCards; ++i)
+        addEffectCard(EffectCardType::UNIVERSAL_DICE);
+    for (int i = 0; i < preset.skipEffectCards; ++i)
+        addEffectCard(EffectCardType::SKIP_EFFECT);
 }
 
 
@@ -190,11 +206,16 @@ void Player::liquidate(Game* game) {
 
 // ==================== 重置 ====================
 void Player::reset() {
-    m_money = INITIAL_MONEY;
     m_position = 0;
     m_bankrupt = false;
     m_skipNextTurn = false;
     m_effectCards.clear();
     m_iteratorTiles.clear();
     m_properties.clear();
+
+    if (m_isAI) {
+        applyAIPreset(m_aiDifficulty);
+    } else {
+        m_money = INITIAL_MONEY;
+    }
 }

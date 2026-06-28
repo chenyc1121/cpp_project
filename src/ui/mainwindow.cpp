@@ -23,6 +23,9 @@
 #include <QDialogButtonBox>
 #include <QButtonGroup>
 #include <QRadioButton>
+#include <QCheckBox>
+#include <QTimer>
+#include <QRandomGenerator>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
@@ -190,6 +193,7 @@ void MainWindow::startNewGame() {
     m_game = new Game(this);
     m_boardWidget->setBoard(&m_game->board());
 
+    // Step 1: 选择玩家数量
     bool ok;
     int playerCount = QInputDialog::getInt(this, "玩家数量",
                                            "请输入玩家人数 (2-4):", 2, 2, 4, 1, &ok);
@@ -204,6 +208,7 @@ void MainWindow::startNewGame() {
     QVector<QString> defaultNames = {"小红", "小蓝", "小绿", "小橙"};
 
     for (int i = 0; i < playerCount; ++i) {
+        // Step 2: 玩家名称
         QString name = QInputDialog::getText(this, "玩家 " + QString::number(i + 1),
                                              "请输入玩家名称:",
                                              QLineEdit::Normal,
@@ -211,7 +216,50 @@ void MainWindow::startNewGame() {
         if (!ok || name.isEmpty()) {
             name = defaultNames[i];
         }
-        m_game->addPlayer(name, colors[i]);
+
+        // Step 3: 是否 AI 玩家
+        QMessageBox aiBox(this);
+        aiBox.setWindowTitle("玩家类型 — " + name);
+        aiBox.setText(name + " 是 AI 玩家还是人类玩家？");
+        QPushButton* humanBtn = aiBox.addButton("人类玩家", QMessageBox::AcceptRole);
+        QPushButton* aiBtn = aiBox.addButton("AI 玩家", QMessageBox::RejectRole);
+        aiBox.setDefaultButton(humanBtn);
+        aiBox.exec();
+
+        bool isAI = (aiBox.clickedButton() == aiBtn);
+        AIDifficulty aiDiff = AIDifficulty::NORMAL;
+
+        if (isAI) {
+            // Step 4: AI 难度选择
+            QDialog diffDlg(this);
+            diffDlg.setWindowTitle("AI 难度 — " + name);
+            auto* diffLayout = new QVBoxLayout(&diffDlg);
+            diffLayout->addWidget(new QLabel("选择 " + name + " 的 AI 难度:", &diffDlg));
+
+            QComboBox* diffCombo = new QComboBox(&diffDlg);
+            diffCombo->addItem("简单 (初始¥10,000, 无效果卡)");
+            diffCombo->addItem("普通 (初始¥15,000, 各1张效果卡)");
+            diffCombo->addItem("困难 (初始¥20,000, 各2张效果卡)");
+            diffCombo->setCurrentIndex(1);  // 默认普通
+            diffLayout->addWidget(diffCombo);
+
+            QDialogButtonBox* diffBtns = new QDialogButtonBox(
+                QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &diffDlg);
+            diffLayout->addWidget(diffBtns);
+            connect(diffBtns, &QDialogButtonBox::accepted, &diffDlg, &QDialog::accept);
+            connect(diffBtns, &QDialogButtonBox::rejected, &diffDlg, &QDialog::reject);
+
+            if (diffDlg.exec() != QDialog::Accepted) {
+                // 取消则默认为普通
+            }
+            switch (diffCombo->currentIndex()) {
+            case 0: aiDiff = AIDifficulty::EASY; break;
+            case 1: aiDiff = AIDifficulty::NORMAL; break;
+            case 2: aiDiff = AIDifficulty::HARD; break;
+            }
+        }
+
+        m_game->addPlayer(name, colors[i], isAI, aiDiff);
     }
 
     m_eventLog->clear();
@@ -486,12 +534,34 @@ void MainWindow::onDiceRolled(int die1, int die2) {
 // ==================== 回合通知 ====================
 void MainWindow::onTurnStarted(Player* player) {
     if (!player) return;
-    m_statusLabel->setText("当前回合：" + player->name());
+    QString label = player->isAI()
+        ? "当前回合：" + player->name() + " (AI)"
+        : "当前回合：" + player->name();
+    m_statusLabel->setText(label);
     m_statusLabel->setStyleSheet(
         "QLabel { background-color: #E6C8C8; border: 2px solid #8E3838; "
         "border-radius: 6px; padding: 8px; font-size: 14px; font-weight: bold; color:#000000;}");
     m_playerPanel->highlightCurrentPlayer(player);
     m_diceWidget->setRollEnabled(true);
+
+    // AI 自动掷骰
+    if (player->isAI()) {
+        m_diceWidget->setRollEnabled(false);
+        QTimer::singleShot(800, this, [this]() {
+            if (m_game && m_game->currentPlayer()
+                && m_game->currentPlayer()->isAI()
+                && m_game->state() == GameState::PRE_ROLL) {
+                if (m_debugMode) {
+                    // DEBUG 模式下 AI 也随机选点
+                    int d1 = QRandomGenerator::global()->bounded(1, 7);
+                    int d2 = QRandomGenerator::global()->bounded(1, 7);
+                    m_game->debugRollDice(d1, d2);
+                } else {
+                    m_game->rollDice();
+                }
+            }
+        });
+    }
 }
 
 void MainWindow::onPlayerMoved(Player* player, int from, int to) {

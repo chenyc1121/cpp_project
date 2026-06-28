@@ -31,7 +31,8 @@ public:
     ~Game();
 
     // === 初始化 ===
-    void addPlayer(const QString& name, const QColor& color);
+    void addPlayer(const QString& name, const QColor& color,
+                   bool isAI = false, AIDifficulty aiDiff = AIDifficulty::NORMAL);
     void startGame();
     void resetGame();
 
@@ -92,6 +93,18 @@ public:
 
     // === 胜利判断 ===
     Player* getWinner() const;
+
+    // === AI 决策（供 Tile::landOn 中 isAI 分支调用） ===
+    void aiDecideBuyProperty(Player* player, int tileIndex);
+    void aiDecideBuildHouse(Player* player, int tileIndex);
+    void aiDecideQA(Player* player, int tileIndex);
+    void aiDecideComputerLab(Player* player);
+    void aiDecideShop(Player* player);
+    void aiDecideShopEntrance(Player* player);
+    void aiDecideVirtualFuncBuy(Player* player, int tileIndex);
+    void aiDecideVirtualFuncRent(Player* payer, int tileIndex, Player* owner);
+    void aiDecideVirtualFuncBuild(Player* player, int tileIndex);
+    void aiDecideIteratorCard(Player* player, int tileIndex);
 
 signals:
     void gameStateChanged(GameState newState);

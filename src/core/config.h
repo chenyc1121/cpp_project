@@ -69,6 +69,41 @@ struct TileDef {
 };
 
 // ==================== 效果卡价格常量 ====================
+// ==================== AI 难度预设 ====================
+enum class AIDifficulty {
+    EASY,
+    NORMAL,
+    HARD
+};
+
+struct AIDifficultyPreset {
+    int initialMoney;
+    int rollAgainCards;
+    int universalDiceCards;
+    int skipEffectCards;
+};
+
+inline AIDifficultyPreset aiDifficultyPreset(AIDifficulty diff) {
+    switch (diff) {
+    case AIDifficulty::EASY:
+        return {10000, 0, 0, 0};
+    case AIDifficulty::NORMAL:
+        return {15000, 1, 1, 1};
+    case AIDifficulty::HARD:
+        return {20000, 2, 2, 2};
+    }
+    return {15000, 0, 0, 0};
+}
+
+inline const char* aiDifficultyName(AIDifficulty diff) {
+    switch (diff) {
+    case AIDifficulty::EASY:   return "简单";
+    case AIDifficulty::NORMAL: return "普通";
+    case AIDifficulty::HARD:   return "困难";
+    }
+    return "未知";
+}
+
 constexpr int CARD_PRICE_ROLL_AGAIN = 500;
 constexpr int CARD_PRICE_UNIVERSAL_DICE = 1000;
 constexpr int CARD_PRICE_VIRTUAL_FUNCTION = 800;

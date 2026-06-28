@@ -45,7 +45,10 @@ void PlayerPanel::setPlayers(const QVector<Player*>& players) {
             .arg(colorName));
         rowLayout->addWidget(colorDot);
 
-        row.nameLabel = new QLabel(players[i]->name(), this);
+        QString displayName = players[i]->isAI()
+            ? players[i]->name() + " [AI]"
+            : players[i]->name();
+        row.nameLabel = new QLabel(displayName, this);
         row.nameLabel->setMinimumWidth(50);
         row.nameLabel->setStyleSheet("font-weight: bold;");
         rowLayout->addWidget(row.nameLabel);

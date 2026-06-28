@@ -24,10 +24,11 @@ Game::~Game() {
 
 
 // ==================== 初始化 ====================
-void Game::addPlayer(const QString& name, const QColor& color) {
+void Game::addPlayer(const QString& name, const QColor& color,
+                     bool isAI, AIDifficulty aiDiff) {
     if (m_players.size() >= 4) return;
     int id = m_players.size();
-    m_players.append(new Player(name, color, id));
+    m_players.append(new Player(name, color, id, isAI, aiDiff));
 }
 
 void Game::startGame() {
@@ -89,6 +90,28 @@ void Game::rollDice() {
 
     // 检查万能骰子
     if (player->hasEffectCard(EffectCardType::UNIVERSAL_DICE)) {
+        if (player->isAI()) {
+            // AI: 延迟后自动使用万能骰子选 6+6=12
+            logEvent(player->name() + " (AI) 使用万能骰子");
+            QTimer::singleShot(600, this, [this]() {
+                if (m_state != GameState::ROLLING) return;
+                Player* p = currentPlayer();
+                if (!p || !p->isAI()) return;
+                p->useEffectCard(EffectCardType::UNIVERSAL_DICE);
+                emit playerUpdated(p);
+                logEvent(p->name() + " (AI) 选择骰子点数：6 + 6 = 12");
+                m_lastDie1 = 6;
+                m_lastDie2 = 6;
+                m_lastDiceTotal = 12;
+                m_consecutiveDoubles++;
+                logEvent("掷出对子！");
+                emit diceRolled(6, 6);
+                m_state = GameState::MOVING;
+                emit gameStateChanged(m_state);
+                movePlayer();
+            });
+            return;
+        }
         emit promptUseCard(player, EffectCardType::UNIVERSAL_DICE);
         m_waitingForCardDecision = true;
         m_pendingCardType = EffectCardType::UNIVERSAL_DICE;
@@ -141,6 +164,19 @@ void Game::onDiceRolled(int die1, int die2) {
 
     // 检查再丢一次骰子卡
     if (player->hasEffectCard(EffectCardType::ROLL_AGAIN)) {
+        if (player->isAI()) {
+            // AI: 延迟后自动使用
+            logEvent(player->name() + " (AI) 使用'再丢一次骰子'卡");
+            QTimer::singleShot(600, this, [this]() {
+                if (m_state != GameState::ROLLING) return;
+                Player* p = currentPlayer();
+                if (!p || !p->isAI()) return;
+                p->useEffectCard(EffectCardType::ROLL_AGAIN);
+                emit playerUpdated(p);
+                m_dice->roll();
+            });
+            return;
+        }
         emit promptUseCard(player, EffectCardType::ROLL_AGAIN);
         m_waitingForCardDecision = true;
         m_pendingCardType = EffectCardType::ROLL_AGAIN;
@@ -217,10 +253,39 @@ void Game::handleLanding() {
     }
 
     if (canSkip && player->hasEffectCard(EffectCardType::SKIP_EFFECT)) {
-        emit promptUseCard(player, EffectCardType::SKIP_EFFECT);
-        m_waitingForCardDecision = true;
-        m_pendingCardType = EffectCardType::SKIP_EFFECT;
-        return;
+        if (player->isAI()) {
+            // AI: 检查是否值得跳过
+            bool shouldSkip = false;
+            if (tile->type() == TileType::TAX) {
+                shouldSkip = true;  // 税收格一定跳过
+            } else {
+                // 计算租金是否 > 500
+                int estimatedRent = 0;
+                if (auto* pt = dynamic_cast<PropertyTile*>(tile))
+                    estimatedRent = pt->calculateRent();
+                else if (auto* ut = dynamic_cast<UtilityTile*>(tile))
+                    estimatedRent = ut->calculateRent(m_lastDiceTotal);
+                else if (auto* rt = dynamic_cast<RailroadTile*>(tile))
+                    estimatedRent = rt->calculateRent();
+                else if (auto* it = dynamic_cast<IteratorTile*>(tile))
+                    estimatedRent = it->calculateRent();
+                shouldSkip = (estimatedRent > 500);
+            }
+
+            if (shouldSkip) {
+                logEvent(player->name() + " (AI) 使用跳过卡！");
+                player->useEffectCard(EffectCardType::SKIP_EFFECT);
+                emit playerUpdated(player);
+                endTurn();
+                return;
+            }
+            // 不使用跳过卡，继续正常流程
+        } else {
+            emit promptUseCard(player, EffectCardType::SKIP_EFFECT);
+            m_waitingForCardDecision = true;
+            m_pendingCardType = EffectCardType::SKIP_EFFECT;
+            return;
+        }
     }
 
     tile->landOn(player, this);
@@ -780,4 +845,175 @@ Player* Game::getWinner() const {
         if (!p->isBankrupt()) return p;
     }
     return nullptr;
+}
+
+// ==================== AI 决策方法 ====================
+
+void Game::aiDecideBuyProperty(Player* player, int tileIndex) {
+    Tile* t = m_board->tileAt(tileIndex);
+    if (!t) {
+        endTurn();
+        return;
+    }
+
+    int price = t->price();
+    // AI 策略：余额 > 价格 * 2 才购买（保留缓冲金）
+    if (player->canAfford(price) && player->money() > price * 2) {
+        QTimer::singleShot(500, this, [this, player, tileIndex]() {
+            if (m_state != GameState::LANDING) return;
+            buyProperty(player, tileIndex);
+        });
+    } else {
+        logEvent(player->name() + " (AI) 放弃购买 " + t->name()
+                 + "（余额不足或缓冲金不够）");
+        QTimer::singleShot(400, this, [this]() {
+            skipAction();
+        });
+    }
+}
+
+void Game::aiDecideBuildHouse(Player* player, int tileIndex) {
+    auto* pt = dynamic_cast<PropertyTile*>(m_board->tileAt(tileIndex));
+    if (!pt || !pt->canBuildHouse(player)) {
+        skipAction();
+        return;
+    }
+
+    // AI 策略：余额 > 建房费 * 3 才建造
+    if (player->money() > pt->houseCost() * 3) {
+        QTimer::singleShot(500, this, [this, player, tileIndex]() {
+            if (m_state != GameState::LANDING) return;
+            buildHouse(player, tileIndex);
+        });
+    } else {
+        logEvent(player->name() + " (AI) 暂不建房（余额不足）");
+        QTimer::singleShot(400, this, [this]() {
+            skipAction();
+        });
+    }
+}
+
+void Game::aiDecideQA(Player* player, int tileIndex) {
+    // AI 随机选题
+    QTimer::singleShot(600, this, [this, player, tileIndex]() {
+        if (m_state != GameState::LANDING) return;
+        Question q = QuestionBank::drawRandom();
+        setCurrentQuestion(q);
+        int answer = QRandomGenerator::global()->bounded(4);
+        logEvent(player->name() + " (AI) 选择答案 " + QString(QChar('A' + answer)));
+        answerQA(player, tileIndex, answer);
+    });
+}
+
+void Game::aiDecideComputerLab(Player* player) {
+    QTimer::singleShot(600, this, [this, player]() {
+        if (m_state != GameState::LANDING) return;
+        Question q = QuestionBank::drawRandom();
+        setCurrentQuestion(q);
+        int answer = QRandomGenerator::global()->bounded(4);
+        logEvent(player->name() + " (AI) 选择答案 " + QString(QChar('A' + answer)));
+        answerComputerLab(player, answer);
+    });
+}
+
+void Game::aiDecideShop(Player* player) {
+    // AI 只买不依赖伪代码的卡：万能骰子 > 跳过卡 > 再丢一次
+    QTimer::singleShot(600, this, [this, player]() {
+        if (m_state != GameState::LANDING) return;
+        // 按优先级购买
+        struct { EffectCardType type; int price; } priorities[] = {
+            {EffectCardType::UNIVERSAL_DICE, CARD_PRICE_UNIVERSAL_DICE},
+            {EffectCardType::SKIP_EFFECT,    CARD_PRICE_SKIP_EFFECT},
+            {EffectCardType::ROLL_AGAIN,     CARD_PRICE_ROLL_AGAIN},
+        };
+        for (auto& item : priorities) {
+            if (player->canAfford(item.price) && player->money() > item.price * 2) {
+                EffectCard card = createEffectCard(item.type);
+                logEvent(player->name() + " (AI) 购买了 " + card.name);
+                buyEffectCard(player, card);
+                return;
+            }
+        }
+        logEvent(player->name() + " (AI) 离开商店（资金不足）");
+        skipAction();
+    });
+}
+
+void Game::aiDecideShopEntrance(Player* player) {
+    QTimer::singleShot(500, this, [this, player]() {
+        if (m_state != GameState::LANDING) return;
+        if (player->money() > 3000) {
+            goToShop(player);
+        } else {
+            logEvent(player->name() + " (AI) 资金不足，不进入商店");
+            declineShopEntrance();
+        }
+    });
+}
+
+void Game::aiDecideVirtualFuncBuy(Player* player, int tileIndex) {
+    // AI 不使用虚函数卡，只用基类价格
+    QTimer::singleShot(500, this, [this, player, tileIndex]() {
+        if (m_state != GameState::LANDING) return;
+        auto* vt = dynamic_cast<VirtualfuncTile*>(m_board->tileAt(tileIndex));
+        if (!vt || vt->owner() != nullptr) {
+            skipAction();
+            return;
+        }
+        int basePrice = vt->PropertyTile::price();
+        if (player->canAfford(basePrice) && player->money() > basePrice * 2) {
+            logEvent(player->name() + " (AI) 使用基类价格购买 " + vt->name());
+            buyPropertyVirtualFunc(player, tileIndex, false);
+        } else {
+            logEvent(player->name() + " (AI) 放弃购买 " + vt->name());
+            skipAction();
+        }
+    });
+}
+
+void Game::aiDecideVirtualFuncRent(Player* payer, int tileIndex, Player* owner) {
+    // AI 作为地主：不使用虚函数卡，只收基类租金
+    Q_UNUSED(owner)
+    QTimer::singleShot(500, this, [this, payer, tileIndex]() {
+        if (m_state != GameState::LANDING) return;
+        auto* vt = dynamic_cast<VirtualfuncTile*>(m_board->tileAt(tileIndex));
+        if (!vt) {
+            endTurn();
+            return;
+        }
+        // 纯虚函数且地主无卡 → 无法收租
+        if (vt->rentIsPureVirtual() && !vt->owner()->hasEffectCard(EffectCardType::VIRTUAL_FUNCTION)) {
+            handlePureVirtualNoRent(payer, tileIndex);
+            return;
+        }
+        // 用基类租金
+        payRentVirtualFunc(payer, tileIndex, false);
+    });
+}
+
+void Game::aiDecideVirtualFuncBuild(Player* player, int tileIndex) {
+    // AI 不使用虚函数卡建房
+    QTimer::singleShot(500, this, [this, player, tileIndex]() {
+        if (m_state != GameState::LANDING) return;
+        auto* vt = dynamic_cast<VirtualfuncTile*>(m_board->tileAt(tileIndex));
+        if (!vt || !vt->canBuildHouse(player)) {
+            skipAction();
+            return;
+        }
+        if (player->money() > vt->houseCost() * 3) {
+            buildHouseVirtualFunc(player, tileIndex, false);
+        } else {
+            logEvent(player->name() + " (AI) 暂不建房");
+            skipAction();
+        }
+    });
+}
+
+void Game::aiDecideIteratorCard(Player* player, int tileIndex) {
+    // AI 不使用迭代器卡，走正常购买/付租流程
+    Q_UNUSED(player)
+    QTimer::singleShot(400, this, [this]() {
+        if (m_state != GameState::LANDING) return;
+        declineIteratorCard();
+    });
 }

@@ -14,7 +14,8 @@ class Game;
 // ==================== 玩家类 ====================
 class Player {
 public:
-    Player(const QString& name, const QColor& color, int id);
+    Player(const QString& name, const QColor& color, int id,
+           bool isAI = false, AIDifficulty aiDiff = AIDifficulty::NORMAL);
 
     // === 属性访问 ===
     int id() const { return m_id; }
@@ -23,6 +24,8 @@ public:
     int money() const { return m_money; }
     int position() const { return m_position; }
     bool isBankrupt() const { return m_bankrupt; }
+    bool isAI() const { return m_isAI; }
+    AIDifficulty aiDifficulty() const { return m_aiDifficulty; }
 
     // === 金钱操作 ===
     void receiveMoney(int amount);
@@ -70,6 +73,8 @@ public:
     void reset();
 
 private:
+    void applyAIPreset(AIDifficulty diff);
+
     int m_id;
     QString m_name;
     QColor m_color;
@@ -77,6 +82,8 @@ private:
     int m_position = 0;
     bool m_bankrupt = false;
     bool m_skipNextTurn = false;
+    bool m_isAI = false;
+    AIDifficulty m_aiDifficulty = AIDifficulty::NORMAL;
     QVector<EffectCard> m_effectCards;
     QVector<PropertyTile*> m_properties;
     QVector<IteratorTile*> m_iteratorTiles;
