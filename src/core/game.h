@@ -49,6 +49,7 @@ public:
     int lastDie2() const { return m_lastDie2; }
 
     void setWaitingForDecision(bool w) { m_waitingForDecision = w; }
+    void setDebugMode(bool d) { m_debugMode = d; }
 
     // === 回合流程 ===
     void rollDice();
@@ -126,6 +127,10 @@ signals:
     void promptUseCard(Player* player, EffectCardType type);
     void promptUniversalDice(Player* player);
 
+    // 知识点事件
+    void promptKnowledge(Player* player, const QString& title, const QString& content);
+    void promptDebugKnowledge(Player* player);  // DEBUG模式下询问是否触发
+
     // 迭代器卡相关信号
     void promptIteratorCard(Player* player, int tileIndex);
 
@@ -159,6 +164,8 @@ private:
 
     bool m_waitingForDecision = false;
     bool m_waitingForCardDecision = false;
+    bool m_debugMode = false;
+    bool m_debugKnowledgePrompted = false;
     bool m_skipLanding = false;
     EffectCardType m_pendingCardType = EffectCardType::ROLL_AGAIN;
     Question m_currentQuestion;

@@ -3,6 +3,7 @@
 #include "tile.h"
 #include "player.h"
 #include "dice.h"
+#include "knowledgebank.h"
 
 #include <QTimer>
 #include <QRandomGenerator>
@@ -49,6 +50,7 @@ void Game::resetGame() {
     m_waitingForDecision = false;
     m_waitingForCardDecision = false;
     m_skipLanding = false;
+    m_debugKnowledgePrompted = false;
     m_lastDie1 = m_lastDie2 = m_lastDiceTotal = 0;
 
     m_board->reset();
@@ -75,6 +77,7 @@ void Game::rollDice() {
     if (m_state != GameState::PRE_ROLL) return;
 
     m_state = GameState::ROLLING;
+    m_debugKnowledgePrompted = false;  // 新回合，重置询问标记
     emit gameStateChanged(m_state);
 
     Player* player = currentPlayer();
@@ -126,6 +129,7 @@ void Game::debugRollDice(int die1, int die2) {
     if (m_state != GameState::PRE_ROLL) return;
 
     m_state = GameState::ROLLING;
+    m_debugKnowledgePrompted = false;  // 新回合，重置询问标记
     emit gameStateChanged(m_state);
 
     Player* player = currentPlayer();
@@ -311,6 +315,24 @@ void Game::endTurn() {
         emit gameStateChanged(m_state);
         emit turnStarted(player);
         return;
+    }
+
+    // 知识点事件：人类玩家回合结束时触发
+    if (!player->isAI() && !player->isBankrupt()) {
+        if (m_debugMode && !m_debugKnowledgePrompted) {
+            // DEBUG 模式：首次询问是否触发
+            m_debugKnowledgePrompted = true;
+            emit promptDebugKnowledge(player);
+            return;
+        } else if (QRandomGenerator::global()->bounded(100) < 10) {
+            // 正常模式：10% 概率
+            KnowledgeEntry ke = KnowledgeBank::drawRandom();
+            if (!ke.title.isEmpty()) {
+                logEvent(player->name() + " 触发了知识点事件！");
+                emit promptKnowledge(player, ke.title, ke.content);
+                return;
+            }
+        }
     }
 
     if (!checkGameOver()) {

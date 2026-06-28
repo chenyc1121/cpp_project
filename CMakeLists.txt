@@ -24,6 +24,8 @@ set(PROJECT_SOURCES
     src/core/effectcard.cpp
     src/core/questionbank.h
     src/core/questionbank.cpp
+    src/core/knowledgebank.h
+    src/core/knowledgebank.cpp
     src/core/player.h
     src/core/player.cpp
     src/core/board.h

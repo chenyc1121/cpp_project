@@ -46,6 +46,10 @@ private slots:
     void onPromptVirtualFuncRent(Player* payer, int tileIndex, Player* owner, int baseRent, int derivedRent);
     void onPromptVirtualFuncBuild(Player* player, int tileIndex, int baseCost, int derivedCost);
 
+    // 知识点事件
+    void onPromptKnowledge(Player* player, const QString& title, const QString& content);
+    void onPromptDebugKnowledge(Player* player);
+
     // 状态更新
     void onPlayerUpdated(Player* player);
     void onTurnStarted(Player* player);

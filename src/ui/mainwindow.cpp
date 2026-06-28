@@ -5,6 +5,7 @@
 #include "../core/tile.h"
 #include "../core/effectcard.h"
 #include "../core/questionbank.h"
+#include "../core/knowledgebank.h"
 
 #include <QMenuBar>
 #include <QMenu>
@@ -120,8 +121,9 @@ void MainWindow::setupMenuBar() {
     debugAction->setChecked(false);
     connect(debugAction, &QAction::toggled, this, [this](bool checked) {
         m_debugMode = checked;
+        if (m_game) m_game->setDebugMode(checked);
         m_statusLabel->setText(checked
-            ? "DEBUG 模式已开启 —— 可手动设置骰子点数"
+            ? "DEBUG 模式已开启 —— 手动骰子 + 知识点控制"
             : "DEBUG 模式已关闭");
     });
 
@@ -180,6 +182,12 @@ void MainWindow::connectSignals() {
     // 迭代器卡
     connect(m_game, &Game::promptIteratorCard,
             this, &MainWindow::onPromptIteratorCard);
+
+    // 知识点事件
+    connect(m_game, &Game::promptKnowledge,
+            this, &MainWindow::onPromptKnowledge);
+    connect(m_game, &Game::promptDebugKnowledge,
+            this, &MainWindow::onPromptDebugKnowledge);
 
     // 虚函数卡
     connect(m_game, &Game::promptVirtualFuncBuy,
@@ -470,6 +478,7 @@ void MainWindow::startNewGame() {
     updatePropertyDisplay();
 
     connectSignals();
+    m_game->setDebugMode(m_debugMode);
     m_game->startGame();
 }
 
@@ -523,25 +532,73 @@ void MainWindow::onRollDice() {
         if (m_debugDialogOpen) return;
 
         QDialog* dialog = new QDialog(this, Qt::WindowStaysOnTopHint);
-        dialog->setWindowTitle("DEBUG - 手动设置骰子");
+        dialog->setWindowTitle("DEBUG · 手动骰子");
         dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setMinimumWidth(280);
+        dialog->setStyleSheet(
+            "QDialog { background-color: #FFF8F5; border: 3px solid #8B1A1A; border-radius: 8px; }"
+            "QLabel { color: #8B1A1A; font-size: 14px; font-weight: bold; }");
 
-        QFormLayout* form = new QFormLayout(dialog);
+        auto* dlgLayout = new QVBoxLayout(dialog);
+        dlgLayout->setSpacing(14);
+        dlgLayout->setContentsMargins(24, 20, 24, 20);
 
-        QSpinBox* spin1 = new QSpinBox(dialog);
-        spin1->setRange(1, 6);
-        QSpinBox* spin2 = new QSpinBox(dialog);
-        spin2->setRange(1, 6);
+        auto* titleLabel = new QLabel("手动设置骰子点数", dialog);
+        titleLabel->setAlignment(Qt::AlignCenter);
+        titleLabel->setStyleSheet("font-size: 16px;");
+        dlgLayout->addWidget(titleLabel);
 
-        form->addRow("骰子1:", spin1);
-        form->addRow("骰子2:", spin2);
+        auto* diceLayout = new QHBoxLayout();
+        diceLayout->setSpacing(16);
 
-        QDialogButtonBox* buttons = new QDialogButtonBox(
-            QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
-        form->addRow(buttons);
+        auto makeDice = [&](const QString& label) {
+            auto* group = new QVBoxLayout();
+            auto* lbl = new QLabel(label, dialog);
+            lbl->setAlignment(Qt::AlignCenter);
+            lbl->setStyleSheet("font-size: 12px; font-weight: normal; color: #8B7355;");
+            group->addWidget(lbl);
+            auto* spin = new QSpinBox(dialog);
+            spin->setRange(1, 6);
+            spin->setValue(1);
+            spin->setAlignment(Qt::AlignCenter);
+            spin->setFixedSize(64, 48);
+            spin->setStyleSheet(
+                "QSpinBox { font-size: 24px; font-weight: bold; color: #8B1A1A; "
+                "background-color: #FFFFFF; border: 2px solid #8B1A1A; border-radius: 8px; padding: 4px; }"
+                "QSpinBox:hover { border-color: #B22222; }"
+                "QSpinBox::up-button, QSpinBox::down-button { width: 20px; }");
+            group->addWidget(spin);
+            return std::make_pair(group, spin);
+        };
 
-        connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
-        connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+        auto [d1Layout, spin1] = makeDice("骰子 1");
+        auto [d2Layout, spin2] = makeDice("骰子 2");
+        diceLayout->addLayout(d1Layout);
+        diceLayout->addLayout(d2Layout);
+        dlgLayout->addLayout(diceLayout);
+
+        auto* btnRow = new QHBoxLayout();
+        btnRow->addStretch();
+        QPushButton* okBtn = new QPushButton("掷骰子", dialog);
+        okBtn->setStyleSheet(
+            "QPushButton { background-color: #B22222; color: #FFFFFF; padding: 9px 28px; "
+            "border: 1px solid #8B1A1A; border-radius: 6px; font-size: 14px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #C62828; }");
+        okBtn->setCursor(Qt::PointingHandCursor);
+        btnRow->addWidget(okBtn);
+
+        QPushButton* cancelBtn = new QPushButton("取消", dialog);
+        cancelBtn->setStyleSheet(
+            "QPushButton { background-color: #E8E0D8; color: #5A4A3A; padding: 9px 28px; "
+            "border: 1px solid #C0B0A0; border-radius: 6px; font-size: 14px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #DDD5CB; }");
+        cancelBtn->setCursor(Qt::PointingHandCursor);
+        btnRow->addWidget(cancelBtn);
+        btnRow->addStretch();
+        dlgLayout->addLayout(btnRow);
+
+        connect(okBtn, &QPushButton::clicked, dialog, &QDialog::accept);
+        connect(cancelBtn, &QPushButton::clicked, dialog, &QDialog::reject);
 
         connect(dialog, &QDialog::finished, this,
                 [this, spin1, spin2](int result) {
@@ -1570,6 +1627,204 @@ void MainWindow::onGameOver(Player* winner) {
 // ==================== 事件日志 ====================
 void MainWindow::onLogEvent(const QString& msg) {
     m_eventLog->appendMessage(msg);
+}
+
+// 简易 Markdown → HTML 转换
+static QString md2html(const QString& md) {
+    QString html = md;
+    // 还原 C++ 字符串中的转义换行
+    html.replace("\\n", "\n");
+    // 代码块处理 —— 手动提取
+    QRegularExpression cbRe("```[^`]*```");
+    QStringList codeBlocks;
+    int pos = 0;
+    while (true) {
+        auto match = cbRe.match(html, pos);
+        if (!match.hasMatch()) break;
+        codeBlocks.append(match.captured());
+        pos = match.capturedEnd();
+    }
+    for (int i = 0; i < codeBlocks.size(); ++i) {
+        html.replace(codeBlocks[i], QString("\v%1\v").arg(i));
+    }
+    // 行内代码 `...`
+    html.replace(QRegularExpression("`([^`]+)`"), "<code style='background:#F0E8DD;'>\\1</code>");
+    // 粗体 **...**
+    html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
+    // 标题
+    html.replace(QRegularExpression("^### (.+)$", QRegularExpression::MultilineOption),
+                 "<h3>\\1</h3>");
+    html.replace(QRegularExpression("^## (.+)$", QRegularExpression::MultilineOption),
+                 "<h2>\\1</h2>");
+    html.replace(QRegularExpression("^# (.+)$", QRegularExpression::MultilineOption),
+                 "<h1>\\1</h1>");
+    // 水平线和表格
+    html.replace(QRegularExpression("^---$", QRegularExpression::MultilineOption), "<hr>");
+    html.replace(QRegularExpression("\\|[-: ]+\\|[-: |]+\\|"), "");
+    html.replace(QRegularExpression("^\\|(.+)\\|$", QRegularExpression::MultilineOption),
+                 "<p style='font-family:monospace;margin:2px 0;'>\\1</p>");
+    html.replace(QRegularExpression("!\\[.*?\\]\\(.*?\\)"), "");
+    // 换行
+    html.replace("\n\n", "<br><br>");
+    html.replace("\n", "<br>");
+    // 恢复代码块
+    for (int i = 0; i < codeBlocks.size(); ++i) {
+        QString cb = codeBlocks[i];
+        cb.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        cb.replace(QRegularExpression("^```\\w*\\n?"), "<pre style='background:#F0E8DD;padding:8px;border-radius:4px;'>");
+        cb.replace(QRegularExpression("```$"), "</pre>");
+        html.replace(QString("\v%1\v").arg(i), cb);
+    }
+    // 转义裸露的 &
+    html.replace("&", "&amp;");
+    // 还原代码块中的转义
+    html.replace("&amp;lt;", "&lt;").replace("&amp;gt;", "&gt;");
+    return html;
+}
+
+void MainWindow::onPromptKnowledge(Player* player, const QString& title,
+                                    const QString& content) {
+    if (!m_game || !player) return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle("知识点");
+    dlg.setMinimumWidth(460);
+    dlg.setMinimumHeight(300);
+    dlg.setStyleSheet(
+        "QDialog { background-color: #FFF8F5; border: 3px solid #8B1A1A; border-radius: 8px; }");
+
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->setSpacing(10);
+    layout->setContentsMargins(20, 16, 20, 16);
+
+    // 标题（使用 QLabel + HTML 渲染）
+    auto* titleLabel = new QLabel(&dlg);
+    titleLabel->setTextFormat(Qt::RichText);
+    titleLabel->setText(md2html(title));
+    titleLabel->setWordWrap(true);
+    titleLabel->setStyleSheet(
+        "font-size: 16px; font-weight: bold; color: #8B1A1A; padding-bottom: 2px;");
+    layout->addWidget(titleLabel);
+
+    // 分隔线
+    auto* div = new QLabel(&dlg);
+    div->setFixedHeight(1);
+    div->setStyleSheet("background-color: #8B1A1A;");
+    layout->addWidget(div);
+
+    // 内容（使用 QTextEdit 只读渲染 HTML）
+    auto* contentEdit = new QTextEdit(&dlg);
+    contentEdit->setReadOnly(true);
+    contentEdit->setHtml(md2html(content));
+    contentEdit->setStyleSheet(
+        "QTextEdit { font-size: 13px; color: #3D2820; background-color: #FFFFFF; "
+        "border: 1px solid #E0D5C8; border-radius: 4px; padding: 8px; "
+        "font-family: 'Microsoft YaHei', Arial; }"
+        "QScrollBar:vertical { width: 6px; background: #F0E8DD; border-radius: 3px; }"
+        "QScrollBar::handle:vertical { background: #8B1A1A; border-radius: 3px; }");
+    layout->addWidget(contentEdit, 1);
+
+    // 提示文字
+    auto* hintLabel = new QLabel("阅读完成后可获得一张随机效果卡作为奖励", &dlg);
+    hintLabel->setAlignment(Qt::AlignCenter);
+    hintLabel->setStyleSheet("color: #8B7355; font-size: 12px; font-style: italic;");
+    layout->addWidget(hintLabel);
+
+    // 按钮
+    auto* btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+    QPushButton* okBtn = new QPushButton("完成阅读，领取奖励", &dlg);
+    okBtn->setStyleSheet(
+        "QPushButton { background-color: #B22222; color: #FFFFFF; padding: 10px 28px; "
+        "border: 1px solid #8B1A1A; border-radius: 6px; font-size: 14px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #C62828; }");
+    okBtn->setCursor(Qt::PointingHandCursor);
+    btnLayout->addWidget(okBtn);
+    btnLayout->addStretch();
+    layout->addLayout(btnLayout);
+
+    QObject::connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    // 居中显示
+    dlg.adjustSize();
+    QPoint center = mapToGlobal(QPoint(width() / 2, height() / 2));
+    dlg.move(center.x() - dlg.width() / 2, center.y() - dlg.height() / 2);
+
+    dlg.exec();
+
+    // 奖励随机效果卡
+    EffectCardType rewardType = randomEffectCardType();
+    player->addEffectCard(rewardType);
+    EffectCard card = createEffectCard(rewardType);
+    m_game->logEvent(player->name() + " 完成阅读，获得效果卡：" + card.name + "！");
+    emit m_game->playerUpdated(player);
+
+    m_game->endTurn();
+}
+
+void MainWindow::onPromptDebugKnowledge(Player* player) {
+    if (!m_game || !player) return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle("DEBUG — 知识点事件");
+    dlg.setMinimumWidth(320);
+    dlg.setStyleSheet(
+        "QDialog { background-color: #FFF8F5; border: 3px solid #8B1A1A; border-radius: 8px; }");
+
+    auto* layout = new QVBoxLayout(&dlg);
+    layout->setSpacing(14);
+    layout->setContentsMargins(24, 20, 24, 20);
+
+    auto* label = new QLabel("DEBUG 模式：是否触发知识点事件？", &dlg);
+    label->setWordWrap(true);
+    label->setStyleSheet("font-size: 15px; font-weight: bold; color: #8B1A1A;");
+    layout->addWidget(label);
+
+    auto* hint = new QLabel("选\"是\"展示随机知识点并奖励效果卡\n选\"否\"跳过，直接结束回合", &dlg);
+    hint->setStyleSheet("color: #8B7355; font-size: 12px;");
+    layout->addWidget(hint);
+
+    auto* btnRow = new QHBoxLayout();
+    btnRow->addStretch();
+    QPushButton* yesBtn = new QPushButton("是，触发知识点", &dlg);
+    yesBtn->setStyleSheet(
+        "QPushButton { background-color: #B22222; color: #FFFFFF; padding: 9px 24px; "
+        "border: 1px solid #8B1A1A; border-radius: 5px; font-size: 13px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #C62828; }");
+    yesBtn->setCursor(Qt::PointingHandCursor);
+    btnRow->addWidget(yesBtn);
+
+    QPushButton* noBtn = new QPushButton("否，跳过", &dlg);
+    noBtn->setStyleSheet(
+        "QPushButton { background-color: #E8E0D8; color: #5A4A3A; padding: 9px 24px; "
+        "border: 1px solid #C0B0A0; border-radius: 5px; font-size: 13px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #DDD5CB; }");
+    noBtn->setCursor(Qt::PointingHandCursor);
+    btnRow->addWidget(noBtn);
+    btnRow->addStretch();
+    layout->addLayout(btnRow);
+
+    QObject::connect(yesBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    QObject::connect(noBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+
+    dlg.adjustSize();
+    QPoint center = mapToGlobal(QPoint(width() / 2, height() / 2));
+    dlg.move(center.x() - dlg.width() / 2, center.y() - dlg.height() / 2);
+
+    if (dlg.exec() == QDialog::Accepted) {
+        // 触发知识点
+        KnowledgeEntry ke = KnowledgeBank::drawRandom();
+        if (!ke.title.isEmpty()) {
+            // 展示知识点
+            m_game->logEvent(player->name() + " [DEBUG] 触发了知识点事件！");
+            emit m_game->promptKnowledge(player, ke.title, ke.content);
+            return;  // promptKnowledge handler will call endTurn
+        }
+    }
+
+    // 跳过
+    m_game->logEvent(player->name() + " [DEBUG] 跳过了知识点事件");
+    m_game->endTurn();
 }
 
 
