@@ -12,6 +12,17 @@ EventLog::EventLog(QWidget* parent)
     m_textEdit->setReadOnly(true);
     m_textEdit->setMaximumHeight(200);
     m_textEdit->setPlaceholderText("游戏事件将显示在这里...");
+    m_textEdit->setStyleSheet(
+        "QTextEdit {"
+        "  background-color: #FFFFFF;"
+        "  border: 1px solid #8B1A1A;"
+        "  border-radius: 6px;"
+        "  padding: 6px 8px;"
+        "  font-size: 12px;"
+        "  color: #3D2820;"
+        "}"
+        "QScrollBar:vertical { width: 6px; background: #F0E8DD; border-radius: 3px; }"
+        "QScrollBar::handle:vertical { background: #8B1A1A; border-radius: 3px; min-height: 16px; }");
     layout->addWidget(m_textEdit);
 
     setLayout(layout);

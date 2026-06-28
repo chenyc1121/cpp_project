@@ -30,6 +30,7 @@ protected:
 
 signals:
     void tileClicked(int tileIndex);
+    void startGameRequested();  // 点击中央开始按钮
 
 private:
     void drawTile(QPainter& painter, int index, const QRect& rect);
@@ -37,11 +38,13 @@ private:
     QColor colorForGroup(int tileIndex) const;
 
     // 按钮点击区域计算
-    QRect titleBarButtonRect(const QRect& tileRect, bool isCorner) const;
+    QRect titleBarButtonRect(const QRect& tileRect) const;
     QRect bodyButtonRect(const QRect& tileRect) const;
+    QRect startButtonRect() const;  // 中央开始游戏按钮区域
 
     Board* m_board = nullptr;
     const QVector<Player*>* m_players = nullptr;
+    QRect m_startBtnRect;  // 缓存开始按钮区域用于点击检测
 
     int cellSize() const;
     double scaleFactor() const;

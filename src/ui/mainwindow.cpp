@@ -50,27 +50,29 @@ MainWindow::~MainWindow() {
 // ==================== UI 布局 ====================
 void MainWindow::setupUI() {
     auto* centralWidget = new QWidget(this);
+    centralWidget->setStyleSheet("background-color: #E8E0D8;");
     setCentralWidget(centralWidget);
 
     auto* mainVLayout = new QVBoxLayout(centralWidget);
-    mainVLayout->setSpacing(6);
-    mainVLayout->setContentsMargins(8, 8, 8, 8);
+    mainVLayout->setSpacing(4);
+    mainVLayout->setContentsMargins(4, 4, 4, 4);
 
-    // 上方区域：棋盘 + 右侧面板
+    // 上方区域：棋盘 + 右侧面板（按比例自适应）
     auto* topArea = new QHBoxLayout();
-    topArea->setSpacing(8);
+    topArea->setSpacing(4);
 
-    topArea->addWidget(m_boardWidget, 1);
+    topArea->addWidget(m_boardWidget, 7);  // 棋盘占 70%
 
     auto* rightPanel = new QWidget(this);
+    rightPanel->setStyleSheet("background-color: #E8E0D8;");
     auto* rightLayout = new QVBoxLayout(rightPanel);
-    rightLayout->setSpacing(6);
+    rightLayout->setSpacing(4);
     rightLayout->setContentsMargins(0, 0, 0, 0);
 
     m_statusLabel->setAlignment(Qt::AlignCenter);
     m_statusLabel->setStyleSheet(
-        "QLabel { background-color: #FFF9C4; border: 2px solid #F9A825; "
-        "border-radius: 6px; padding: 8px; font-size: 14px; font-weight: bold; color:#000000;}");
+        "QLabel { background-color: #FFF8F5; border: 2px solid #8B1A1A; "
+        "border-radius: 6px; padding: 8px; font-size: 13px; font-weight: bold; color: #8B1A1A;}");
     m_statusLabel->setWordWrap(true);
     rightLayout->addWidget(m_statusLabel);
 
@@ -78,19 +80,18 @@ void MainWindow::setupUI() {
     rightLayout->addWidget(m_diceWidget);
     rightLayout->addWidget(m_eventLog);
 
-    rightPanel->setMaximumWidth(280);
-    topArea->addWidget(rightPanel);
+    topArea->addWidget(rightPanel, 3);  // 右侧面板占 30%
+    mainVLayout->addLayout(topArea, 9);  // 上方占 90%
 
-    mainVLayout->addLayout(topArea, 1);
-
-    // 下方区域：玩家道具展示
+    // 下方道具展示区（自适应高度）
     m_propertyArea->setWidgetResizable(true);
-    m_propertyArea->setMaximumHeight(130);
     m_propertyArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_propertyArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_propertyArea->setStyleSheet(
-        "QScrollArea { border: 2px solid #8E3838; border-radius: 6px; "
-        "background-color: #F5E8E8; }");
+        "QScrollArea { border: 1px solid #8B1A1A; border-radius: 4px; "
+        "background-color: #FFF8F5; }"
+        "QScrollBar:horizontal { height: 6px; background: #F0E8DD; border-radius: 3px; }"
+        "QScrollBar::handle:horizontal { background: #8B1A1A; border-radius: 3px; min-width: 20px; }");
 
     m_propertyContent->setStyleSheet("background: transparent;");
     auto* propLayout = new QHBoxLayout(m_propertyContent);
@@ -98,9 +99,13 @@ void MainWindow::setupUI() {
     propLayout->setContentsMargins(8, 4, 8, 4);
     propLayout->addStretch();
     m_propertyContent->setLayout(propLayout);
-
     m_propertyArea->setWidget(m_propertyContent);
-    mainVLayout->addWidget(m_propertyArea);
+
+    mainVLayout->addWidget(m_propertyArea, 1);  // 下方占 10%
+
+    // 棋盘中央"开始游戏"按钮
+    connect(m_boardWidget, &BoardWidget::startGameRequested,
+            this, &MainWindow::onNewGame);
 }
 
 void MainWindow::setupMenuBar() {
@@ -193,72 +198,268 @@ void MainWindow::startNewGame() {
     m_game = new Game(this);
     m_boardWidget->setBoard(&m_game->board());
 
-    // Step 1: 选择玩家数量
-    bool ok;
-    int playerCount = QInputDialog::getInt(this, "玩家数量",
-                                           "请输入玩家人数 (2-4):", 2, 2, 4, 1, &ok);
-    if (!ok) {
+    QVector<QColor> colors = {QColor("#E53935"), QColor("#1E88E5"),
+                              QColor("#43A047"), QColor("#FB8C00")};
+    QVector<QString> defaultNames = {"小红", "小蓝", "小绿", "小橙"};
+
+    // ── 游戏设置对话框 ──
+    QDialog dlg(this);
+    dlg.setWindowTitle("新游戏设置");
+    dlg.setMinimumWidth(420);
+    dlg.setStyleSheet(
+        "QDialog { background-color: #FFFFFF; }"
+        "QLabel { color: #3D2820; font-size: 13px; }"
+        "QLineEdit { font-size: 13px; padding: 5px 8px; border: 1px solid #8B1A1A; "
+        "border-radius: 4px; background: #FFFFFF; }"
+        "QComboBox { font-size: 13px; padding: 4px 8px; border: 1px solid #8B1A1A; "
+        "border-radius: 4px; background: #FFFFFF; }");
+
+    auto* mainLayout = new QVBoxLayout(&dlg);
+    mainLayout->setSpacing(14);
+    mainLayout->setContentsMargins(24, 20, 24, 20);
+
+    // 标题
+    auto* titleLabel = new QLabel("程设大富翁 · 新游戏设置", &dlg);
+    titleLabel->setAlignment(Qt::AlignCenter);
+    titleLabel->setStyleSheet(
+        "font-size: 22px; font-weight: bold; color: #8B1A1A; padding-bottom: 4px;");
+    mainLayout->addWidget(titleLabel);
+
+    // 装饰线
+    auto* divider = new QLabel(&dlg);
+    divider->setFixedHeight(1);
+    divider->setStyleSheet("background-color: #8B1A1A;");
+    mainLayout->addWidget(divider);
+
+    // 玩家数量选择
+    auto* countRow = new QHBoxLayout();
+    auto* countLabel = new QLabel("玩家数量", &dlg);
+    countLabel->setStyleSheet("color: #8B1A1A; font-size: 14px; font-weight: bold;");
+    countRow->addWidget(countLabel);
+    countRow->addStretch();
+
+    QButtonGroup* countGroup = new QButtonGroup(&dlg);
+    int playerCount = 2;
+    QString countBtnStyle =
+        "QPushButton { background-color: #F5EDE5; color: #8B1A1A; border: 1px solid #8B1A1A; "
+        "border-radius: 5px; padding: 5px 18px; font-size: 14px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #F0E0D8; }"
+        "QPushButton:checked { background-color: #B22222; color: #FFFFFF; "
+        "border: 1px solid #8B1A1A; }";
+    for (int n = 2; n <= 4; ++n) {
+        auto* btn = new QPushButton(QString::number(n), &dlg);
+        btn->setCheckable(true);
+        btn->setChecked(n == 2);
+        btn->setStyleSheet(countBtnStyle);
+        btn->setCursor(Qt::PointingHandCursor);
+        countGroup->addButton(btn, n);
+        countRow->addWidget(btn);
+    }
+    mainLayout->addLayout(countRow);
+
+    // 玩家卡片容器
+    QScrollArea* scrollArea = new QScrollArea(&dlg);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setMaximumHeight(340);
+    scrollArea->setStyleSheet(
+        "QScrollArea { background: transparent; border: none; }"
+        "QScrollBar:vertical { width: 6px; background: #F0E8DD; border-radius: 3px; }"
+        "QScrollBar::handle:vertical { background: #8B1A1A; border-radius: 3px; }");
+
+    QWidget* cardsWidget = new QWidget(&dlg);
+    cardsWidget->setStyleSheet("background: transparent;");
+    QVBoxLayout* cardsLayout = new QVBoxLayout(cardsWidget);
+    cardsLayout->setSpacing(8);
+    cardsLayout->setContentsMargins(0, 0, 0, 0);
+    scrollArea->setWidget(cardsWidget);
+    mainLayout->addWidget(scrollArea, 1);
+
+    // 底部按钮
+    auto* buttonRow = new QHBoxLayout();
+    buttonRow->addStretch();
+
+    QPushButton* cancelBtn = new QPushButton("取 消", &dlg);
+    cancelBtn->setStyleSheet(
+        "QPushButton { background-color: #E8E0D8; color: #5A4A3A; padding: 9px 28px; "
+        "border: 1px solid #C0B0A0; border-radius: 6px; font-size: 14px; font-weight: bold; }"
+        "QPushButton:hover { background-color: #DDD5CB; }");
+    cancelBtn->setCursor(Qt::PointingHandCursor);
+    buttonRow->addWidget(cancelBtn);
+
+    QPushButton* startBtn = new QPushButton("开始游戏", &dlg);
+    startBtn->setStyleSheet(
+        "QPushButton { background-color: #B22222; color: #FFFFFF; padding: 9px 32px; "
+        "border: 1px solid #8B1A1A; border-radius: 6px; font-size: 14px; "
+        "font-weight: bold; letter-spacing: 2px; }"
+        "QPushButton:hover { background-color: #C62828; }"
+        "QPushButton:pressed { background-color: #8B1A1A; }");
+    startBtn->setCursor(Qt::PointingHandCursor);
+    buttonRow->addWidget(startBtn);
+    mainLayout->addLayout(buttonRow);
+
+    // 存储玩家配置
+    struct PlayerConfigWidgets {
+        QLineEdit* nameEdit;
+        QPushButton* humanBtn;
+        QPushButton* aiBtn;
+        QWidget* difficultyRow;
+        QComboBox* diffCombo;
+    };
+    QVector<PlayerConfigWidgets> configWidgets;
+
+    auto rebuildCards = [&]() {
+        for (auto& w : configWidgets) { /* children deleted with parent */ }
+        configWidgets.clear();
+        QLayoutItem* item;
+        while ((item = cardsLayout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
+
+        QString cardStyle =
+            "QFrame { background-color: #FFF8F5; border: 1px solid #D6C8B8; "
+            "border-radius: 8px; padding: 4px; }";
+        QString toggleStyle =
+            "QPushButton { background-color: #F5EDE5; color: #8B1A1A; "
+            "border: 1px solid #C0B0A0; border-radius: 4px; padding: 3px 14px; font-size: 12px; }"
+            "QPushButton:hover { background-color: #F0E0D8; }"
+            "QPushButton:checked { background-color: #B22222; color: #FFFFFF; "
+            "border: 1px solid #8B1A1A; }";
+
+        for (int i = 0; i < playerCount; ++i) {
+            PlayerConfigWidgets pcw;
+
+            QFrame* card = new QFrame(cardsWidget);
+            card->setStyleSheet(cardStyle);
+            auto* cardLayout = new QVBoxLayout(card);
+            cardLayout->setSpacing(6);
+            cardLayout->setContentsMargins(12, 8, 12, 8);
+
+            // 标题行
+            auto* headerRow = new QHBoxLayout();
+            auto* dot = new QLabel(card);
+            dot->setFixedSize(10, 10);
+            dot->setStyleSheet(QString(
+                "background-color: %1; border-radius: 5px; "
+                "border: 1px solid rgba(0,0,0,0.15);").arg(colors[i].name()));
+            headerRow->addWidget(dot);
+            auto* headerLabel = new QLabel("玩家 " + QString::number(i + 1), card);
+            headerLabel->setStyleSheet("color: #8B1A1A; font-size: 12px; font-weight: bold;");
+            headerRow->addWidget(headerLabel);
+            headerRow->addStretch();
+            cardLayout->addLayout(headerRow);
+
+            // 名称行
+            auto* nameRow = new QHBoxLayout();
+            auto* nameLabel = new QLabel("名称", card);
+            nameLabel->setFixedWidth(32);
+            nameLabel->setStyleSheet("color: #8B1A1A; font-size: 12px;");
+            nameRow->addWidget(nameLabel);
+            pcw.nameEdit = new QLineEdit(defaultNames[i], card);
+            pcw.nameEdit->setStyleSheet(
+                "QLineEdit { background: #FFFFFF; color: #3D2820; border: 1px solid #8B1A1A; "
+                "border-radius: 4px; padding: 4px 8px; font-size: 13px; }"
+                "QLineEdit:focus { border: 2px solid #B22222; }");
+            nameRow->addWidget(pcw.nameEdit);
+            cardLayout->addLayout(nameRow);
+
+            // 类型行
+            auto* typeRow = new QHBoxLayout();
+            auto* typeLabel = new QLabel("类型", card);
+            typeLabel->setFixedWidth(32);
+            typeLabel->setStyleSheet("color: #8B1A1A; font-size: 12px;");
+            typeRow->addWidget(typeLabel);
+
+            QButtonGroup* typeGroup = new QButtonGroup(card);
+            pcw.humanBtn = new QPushButton("人类", card);
+            pcw.humanBtn->setCheckable(true);
+            pcw.humanBtn->setChecked(true);
+            pcw.humanBtn->setStyleSheet(toggleStyle);
+            pcw.humanBtn->setCursor(Qt::PointingHandCursor);
+            typeGroup->addButton(pcw.humanBtn);
+            typeRow->addWidget(pcw.humanBtn);
+
+            pcw.aiBtn = new QPushButton("AI", card);
+            pcw.aiBtn->setCheckable(true);
+            pcw.aiBtn->setStyleSheet(toggleStyle);
+            pcw.aiBtn->setCursor(Qt::PointingHandCursor);
+            typeGroup->addButton(pcw.aiBtn);
+            typeRow->addWidget(pcw.aiBtn);
+            typeRow->addStretch();
+            cardLayout->addLayout(typeRow);
+
+            // 难度行（默认隐藏）
+            pcw.difficultyRow = new QWidget(card);
+            auto* diffRowLayout = new QHBoxLayout(pcw.difficultyRow);
+            diffRowLayout->setContentsMargins(0, 0, 0, 0);
+            auto* diffLabel = new QLabel("难度", card);
+            diffLabel->setFixedWidth(32);
+            diffLabel->setStyleSheet("color: #8B1A1A; font-size: 12px;");
+            diffRowLayout->addWidget(diffLabel);
+            pcw.diffCombo = new QComboBox(card);
+            pcw.diffCombo->addItem("简单 · ¥10,000");
+            pcw.diffCombo->addItem("普通 · ¥15,000");
+            pcw.diffCombo->addItem("困难 · ¥20,000");
+            pcw.diffCombo->setCurrentIndex(1);
+            pcw.diffCombo->setStyleSheet(
+                "QComboBox { background: #FFFFFF; color: #8B1A1A; border: 1px solid #8B1A1A; "
+                "border-radius: 4px; padding: 3px 10px; font-size: 12px; }"
+                "QComboBox:hover { border: 2px solid #B22222; }"
+                "QComboBox::drop-down { border: none; width: 18px; }"
+                "QComboBox QAbstractItemView { background: #FFFFFF; color: #3D2820; "
+                "border: 1px solid #8B1A1A; selection-background-color: #F5EDE5; }");
+            pcw.diffCombo->setCursor(Qt::PointingHandCursor);
+            diffRowLayout->addWidget(pcw.diffCombo);
+            diffRowLayout->addStretch();
+            pcw.difficultyRow->setVisible(false);
+            cardLayout->addWidget(pcw.difficultyRow);
+
+            auto updateDiff = [pcw]() { pcw.difficultyRow->setVisible(pcw.aiBtn->isChecked()); };
+            QObject::connect(pcw.humanBtn, &QPushButton::clicked, cardsWidget, updateDiff, Qt::QueuedConnection);
+            QObject::connect(pcw.aiBtn, &QPushButton::clicked, cardsWidget, updateDiff, Qt::QueuedConnection);
+
+            cardsLayout->addWidget(card);
+            configWidgets.append(pcw);
+        }
+        cardsLayout->addStretch();
+    };
+
+    rebuildCards();
+
+    QObject::connect(countGroup, &QButtonGroup::idClicked, &dlg, [&](int id) {
+        playerCount = id;
+        rebuildCards();
+        dlg.adjustSize();
+    });
+
+    QObject::connect(cancelBtn, &QPushButton::clicked, &dlg, &QDialog::reject);
+    QObject::connect(startBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+
+    dlg.adjustSize();
+    QPoint center = mapToGlobal(QPoint(width() / 2, height() / 2));
+    dlg.move(center.x() - dlg.width() / 2, center.y() - dlg.height() / 2);
+
+    if (dlg.exec() != QDialog::Accepted) {
         delete m_game;
         m_game = nullptr;
         return;
     }
 
-    QVector<QColor> colors = {QColor("#E53935"), QColor("#1E88E5"),
-                              QColor("#43A047"), QColor("#FB8C00")};
-    QVector<QString> defaultNames = {"小红", "小蓝", "小绿", "小橙"};
-
+    // 创建玩家
     for (int i = 0; i < playerCount; ++i) {
-        // Step 2: 玩家名称
-        QString name = QInputDialog::getText(this, "玩家 " + QString::number(i + 1),
-                                             "请输入玩家名称:",
-                                             QLineEdit::Normal,
-                                             defaultNames[i], &ok);
-        if (!ok || name.isEmpty()) {
-            name = defaultNames[i];
-        }
-
-        // Step 3: 是否 AI 玩家
-        QMessageBox aiBox(this);
-        aiBox.setWindowTitle("玩家类型 — " + name);
-        aiBox.setText(name + " 是 AI 玩家还是人类玩家？");
-        QPushButton* humanBtn = aiBox.addButton("人类玩家", QMessageBox::AcceptRole);
-        QPushButton* aiBtn = aiBox.addButton("AI 玩家", QMessageBox::RejectRole);
-        aiBox.setDefaultButton(humanBtn);
-        aiBox.exec();
-
-        bool isAI = (aiBox.clickedButton() == aiBtn);
+        auto& w = configWidgets[i];
+        QString name = w.nameEdit->text().trimmed();
+        if (name.isEmpty()) name = defaultNames[i];
+        bool isAI = w.aiBtn->isChecked();
         AIDifficulty aiDiff = AIDifficulty::NORMAL;
-
         if (isAI) {
-            // Step 4: AI 难度选择
-            QDialog diffDlg(this);
-            diffDlg.setWindowTitle("AI 难度 — " + name);
-            auto* diffLayout = new QVBoxLayout(&diffDlg);
-            diffLayout->addWidget(new QLabel("选择 " + name + " 的 AI 难度:", &diffDlg));
-
-            QComboBox* diffCombo = new QComboBox(&diffDlg);
-            diffCombo->addItem("简单 (初始¥10,000, 无效果卡)");
-            diffCombo->addItem("普通 (初始¥15,000, 各1张效果卡)");
-            diffCombo->addItem("困难 (初始¥20,000, 各2张效果卡)");
-            diffCombo->setCurrentIndex(1);  // 默认普通
-            diffLayout->addWidget(diffCombo);
-
-            QDialogButtonBox* diffBtns = new QDialogButtonBox(
-                QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &diffDlg);
-            diffLayout->addWidget(diffBtns);
-            connect(diffBtns, &QDialogButtonBox::accepted, &diffDlg, &QDialog::accept);
-            connect(diffBtns, &QDialogButtonBox::rejected, &diffDlg, &QDialog::reject);
-
-            if (diffDlg.exec() != QDialog::Accepted) {
-                // 取消则默认为普通
-            }
-            switch (diffCombo->currentIndex()) {
+            switch (w.diffCombo->currentIndex()) {
             case 0: aiDiff = AIDifficulty::EASY; break;
             case 1: aiDiff = AIDifficulty::NORMAL; break;
             case 2: aiDiff = AIDifficulty::HARD; break;
             }
         }
-
         m_game->addPlayer(name, colors[i], isAI, aiDiff);
     }
 
@@ -539,8 +740,8 @@ void MainWindow::onTurnStarted(Player* player) {
         : "当前回合：" + player->name();
     m_statusLabel->setText(label);
     m_statusLabel->setStyleSheet(
-        "QLabel { background-color: #E6C8C8; border: 2px solid #8E3838; "
-        "border-radius: 6px; padding: 8px; font-size: 14px; font-weight: bold; color:#000000;}");
+        "QLabel { background-color: #FFF0F0; border: 2px solid #B22222; "
+        "border-radius: 6px; padding: 10px; font-size: 14px; font-weight: bold; color: #8B1A1A;}");
     m_playerPanel->highlightCurrentPlayer(player);
     m_diceWidget->setRollEnabled(true);
 
@@ -590,7 +791,10 @@ QDialog* MainWindow::createBoardDialog(const QString& title) {
     dlg->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog | Qt::WindowStaysOnTopHint);
     dlg->setWindowTitle(title);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->setStyleSheet("QDialog { border: 3px solid #8F1A10; border-radius: 8px; background: #FFF8F0; }");
+    dlg->setStyleSheet("QDialog { border: 3px solid #8B1A1A; border-radius: 8px; background: #FFFFFF; }"
+        "QLabel { color: #3D2820; font-size: 13px; }"
+        "QRadioButton { color: #3D2820; font-size: 13px; }"
+        "QComboBox { border: 1px solid #8B1A1A; border-radius: 4px; }");
     return dlg;
 }
 
@@ -653,8 +857,8 @@ void MainWindow::onPromptBuyProperty(int tileIndex, Player* player) {
     auto* btnLayout = new QHBoxLayout();
     auto* yesBtn = new QPushButton("购买 (¥" + QString::number(price) + ")", dlg);
     auto* noBtn  = new QPushButton("放弃", dlg);
-    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
-    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    yesBtn->setStyleSheet("QPushButton {background-color:#B22222;color:#FFFFFF;padding:8px 16px;border:1px solid #8B1A1A;border-radius:5px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#E8E0D8;color:#5A4A3A;padding:8px 16px;border:1px solid #C0B0A0;border-radius:5px;}");
     btnLayout->addStretch();
     btnLayout->addWidget(yesBtn);
     btnLayout->addWidget(noBtn);
@@ -720,8 +924,8 @@ void MainWindow::onPromptBuildHouse(int tileIndex, Player* player) {
     auto* btnLayout = new QHBoxLayout();
     auto* yesBtn = new QPushButton("升级", dlg);
     auto* noBtn  = new QPushButton("放弃", dlg);
-    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
-    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    yesBtn->setStyleSheet("QPushButton {background-color:#B22222;color:#FFFFFF;padding:8px 16px;border:1px solid #8B1A1A;border-radius:5px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#E8E0D8;color:#5A4A3A;padding:8px 16px;border:1px solid #C0B0A0;border-radius:5px;}");
     btnLayout->addStretch();
     btnLayout->addWidget(yesBtn);
     btnLayout->addWidget(noBtn);
@@ -875,8 +1079,8 @@ void MainWindow::onPromptShop(Player* player) {
     QHBoxLayout* buttonLayout = new QHBoxLayout();
     QPushButton* buyButton = new QPushButton("购买", dlg);
     QPushButton* cancelButton = new QPushButton("离开", dlg);
-    buyButton->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
-    cancelButton->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    buyButton->setStyleSheet("QPushButton {background-color:#B22222;color:#FFFFFF;padding:8px 16px;border:1px solid #8B1A1A;border-radius:5px;}");
+    cancelButton->setStyleSheet("QPushButton {background-color:#E8E0D8;color:#5A4A3A;padding:8px 16px;border:1px solid #C0B0A0;border-radius:5px;}");
     buttonLayout->addStretch();
     buttonLayout->addWidget(buyButton);
     buttonLayout->addWidget(cancelButton);
@@ -916,8 +1120,8 @@ void MainWindow::onPromptShopEntrance(Player* player) {
     auto* btnLayout = new QHBoxLayout();
     auto* yesBtn = new QPushButton("进入", dlg);
     auto* noBtn  = new QPushButton("跳过", dlg);
-    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
-    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    yesBtn->setStyleSheet("QPushButton {background-color:#B22222;color:#FFFFFF;padding:8px 16px;border:1px solid #8B1A1A;border-radius:5px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#E8E0D8;color:#5A4A3A;padding:8px 16px;border:1px solid #C0B0A0;border-radius:5px;}");
     btnLayout->addStretch();
     btnLayout->addWidget(yesBtn);
     btnLayout->addWidget(noBtn);
@@ -951,8 +1155,8 @@ void MainWindow::onPromptUseCard(Player* player, EffectCardType type) {
     auto* btnLayout = new QHBoxLayout();
     auto* yesBtn = new QPushButton("使用", dlg);
     auto* noBtn  = new QPushButton("不用", dlg);
-    yesBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
-    noBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    yesBtn->setStyleSheet("QPushButton {background-color:#B22222;color:#FFFFFF;padding:8px 16px;border:1px solid #8B1A1A;border-radius:5px;}");
+    noBtn->setStyleSheet("QPushButton {background-color:#E8E0D8;color:#5A4A3A;padding:8px 16px;border:1px solid #C0B0A0;border-radius:5px;}");
     btnLayout->addStretch();
     btnLayout->addWidget(yesBtn);
     btnLayout->addWidget(noBtn);
@@ -1026,7 +1230,7 @@ void MainWindow::onPromptVirtualFuncBuy(Player* player, int tileIndex,
 
     auto* btnLayout = new QHBoxLayout();
     QPushButton* useCardBtn = new QPushButton("使用虚函数卡", dlg);
-    useCardBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    useCardBtn->setStyleSheet("QPushButton {background-color:#8B1A1A;color:#FFFFFF;padding:8px 12px;border:1px solid #6B1A1A;border-radius:5px;}");
     btnLayout->addWidget(useCardBtn);
     QPushButton* noCardBtn = new QPushButton("不用卡", dlg);
     noCardBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
@@ -1086,7 +1290,7 @@ void MainWindow::onPromptVirtualFuncRent(Player* payer, int tileIndex,
 
         QPushButton* useCardBtn = new QPushButton("使用虚函数卡", dlg);
         useCardBtn->setStyleSheet(
-            "QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+            "QPushButton {background-color:#8B1A1A;color:#FFFFFF;padding:8px 12px;border:1px solid #6B1A1A;border-radius:5px;}");
         btnLayout->addWidget(useCardBtn);
 
         QPushButton* cancelBtn = new QPushButton("放弃收租", dlg);
@@ -1115,7 +1319,7 @@ void MainWindow::onPromptVirtualFuncRent(Player* payer, int tileIndex,
 
         QPushButton* useCardBtn = new QPushButton("使用虚函数卡", dlg);
         useCardBtn->setStyleSheet(
-            "QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+            "QPushButton {background-color:#8B1A1A;color:#FFFFFF;padding:8px 12px;border:1px solid #6B1A1A;border-radius:5px;}");
         btnLayout->addWidget(useCardBtn);
 
         QPushButton* noCardBtn = new QPushButton("不用卡", dlg);
@@ -1153,7 +1357,7 @@ void MainWindow::onPromptVirtualFuncRent(Player* payer, int tileIndex,
 
         QPushButton* useCardBtn = new QPushButton("使用虚函数卡", dlg);
         useCardBtn->setStyleSheet(
-            "QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+            "QPushButton {background-color:#8B1A1A;color:#FFFFFF;padding:8px 12px;border:1px solid #6B1A1A;border-radius:5px;}");
         btnLayout->addWidget(useCardBtn);
 
         QPushButton* noCardBtn = new QPushButton("不用卡", dlg);
@@ -1212,7 +1416,7 @@ void MainWindow::onPromptVirtualFuncBuild(Player* player, int tileIndex,
 
     auto* btnLayout = new QHBoxLayout();
     QPushButton* useCardBtn = new QPushButton("使用虚函数卡", dlg);
-    useCardBtn->setStyleSheet("QPushButton {background-color:#1E88E5;color:white;padding:8px 12px;border:none;border-radius:4px;}");
+    useCardBtn->setStyleSheet("QPushButton {background-color:#8B1A1A;color:#FFFFFF;padding:8px 12px;border:1px solid #6B1A1A;border-radius:5px;}");
     btnLayout->addWidget(useCardBtn);
     QPushButton* noCardBtn = new QPushButton("不用卡", dlg);
     noCardBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 12px;border:none;border-radius:4px;}");
@@ -1275,8 +1479,8 @@ void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
     auto* cBtnLayout = new QHBoxLayout();
     QPushButton* nextBtn = new QPushButton("下一步", cardDlg);
     QPushButton* cCancelBtn = new QPushButton("取消", cardDlg);
-    nextBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
-    cCancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+    nextBtn->setStyleSheet("QPushButton {background-color:#B22222;color:#FFFFFF;padding:8px 16px;border:1px solid #8B1A1A;border-radius:5px;}");
+    cCancelBtn->setStyleSheet("QPushButton {background-color:#E8E0D8;color:#5A4A3A;padding:8px 16px;border:1px solid #C0B0A0;border-radius:5px;}");
     cBtnLayout->addStretch();
     cBtnLayout->addWidget(nextBtn);
     cBtnLayout->addWidget(cCancelBtn);
@@ -1313,8 +1517,8 @@ void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
         auto* oBtnLayout = new QHBoxLayout();
         QPushButton* okBtn = new QPushButton("确定", opDlg);
         QPushButton* oCancelBtn = new QPushButton("取消", opDlg);
-        okBtn->setStyleSheet("QPushButton {background-color:#8F1A10;color:white;padding:8px 16px;border:none;border-radius:4px;}");
-        oCancelBtn->setStyleSheet("QPushButton {background-color:#cccccc;color:white;padding:8px 16px;border:none;border-radius:4px;}");
+        okBtn->setStyleSheet("QPushButton {background-color:#B22222;color:#FFFFFF;padding:8px 16px;border:1px solid #8B1A1A;border-radius:5px;}");
+        oCancelBtn->setStyleSheet("QPushButton {background-color:#E8E0D8;color:#5A4A3A;padding:8px 16px;border:1px solid #C0B0A0;border-radius:5px;}");
         oBtnLayout->addStretch();
         oBtnLayout->addWidget(okBtn);
         oBtnLayout->addWidget(oCancelBtn);
@@ -1351,10 +1555,10 @@ void MainWindow::onPromptIteratorCard(Player* player, int tileIndex) {
 void MainWindow::onGameOver(Player* winner) {
     m_diceWidget->setRollEnabled(false);
     if (winner) {
-        m_statusLabel->setText("游戏结束！胜者：" + winner->name());
+        m_statusLabel->setText("游戏结束 · 胜者：" + winner->name());
         m_statusLabel->setStyleSheet(
-            "QLabel { background-color: #FFD700; border: 2px solid #FF6F00; "
-            "border-radius: 6px; padding: 8px; font-size: 16px; font-weight: bold; }");
+            "QLabel { background-color: #FFF0F0; border: 2px solid #B22222; "
+            "border-radius: 6px; padding: 10px; font-size: 16px; font-weight: bold; color: #8B1A1A; }");
         QMessageBox::information(this, "游戏结束",
                                  winner->name() + " 赢得了比赛！\n\n"
                                  + playerSummary(winner));

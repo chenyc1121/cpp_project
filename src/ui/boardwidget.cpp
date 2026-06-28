@@ -79,31 +79,44 @@ QRect BoardWidget::tileRect(int tileIndex) const {
 
 // ==================== 颜色映射 ====================
 QColor BoardWidget::colorForGroup(int tileIndex) const {
-    if (!m_board) return QColor("#f5f5dc");
+    if (!m_board) return QColor("#F0EBE3");
     Tile* t = m_board->tileAt(tileIndex);
-    if (!t) return QColor("#f5f5dc");
+    if (!t) return QColor("#F0EBE3");
 
     switch (t->group()) {
-    case ColorGroup::BROWN:       return QColor("#CD853F");
-    case ColorGroup::LIGHT_BLUE:  return QColor("#87CEEB");
-    case ColorGroup::PINK:        return QColor("#DDA0DD");
-    case ColorGroup::ORANGE:      return QColor("#FFB347");
-    case ColorGroup::RED:         return QColor("#E74C3C");
-    case ColorGroup::YELLOW:      return QColor("#F1C40F");
-    case ColorGroup::GREEN:       return QColor("#2ECC71");
-    case ColorGroup::DEEP_BLUE:   return QColor("#2980B9");
-    default: return QColor("#f5f5dc");
+    case ColorGroup::BROWN:       return QColor("#B8956A");
+    case ColorGroup::LIGHT_BLUE:  return QColor("#82B8D9");
+    case ColorGroup::PINK:        return QColor("#C894C8");
+    case ColorGroup::ORANGE:      return QColor("#E8A85F");
+    case ColorGroup::RED:         return QColor("#D9534F");
+    case ColorGroup::YELLOW:      return QColor("#E0B840");
+    case ColorGroup::GREEN:       return QColor("#5DAC6E");
+    case ColorGroup::DEEP_BLUE:   return QColor("#4A7FB5");
+    default: return QColor("#F0EBE3");
     }
 }
 
 
 // ==================== 按钮区域计算 ====================
-QRect BoardWidget::titleBarButtonRect(const QRect& tileRect, bool isCorner) const {
+QRect BoardWidget::titleBarButtonRect(const QRect& tileRect) const {
     double s = static_cast<double>(tileRect.width()) / REFERENCE_CELL;
-    int barH = qBound(8, static_cast<int>((isCorner ? 16 : 12) * s), 22);
+    int barH = qBound(8, static_cast<int>(16 * s), 22);
     int bw = qBound(10, static_cast<int>(14 * s), 20);
     int bh = barH - 2;
     return QRect(tileRect.right() - bw - 2, tileRect.top() + 2, bw, bh);
+}
+
+QRect BoardWidget::startButtonRect() const {
+    int cell = cellSize();
+    int m = MARGIN;
+    int boardPx = CELLS_PER_SIDE * cell;
+    // 按钮位于中心区域的下半部分
+    int centerX = m + boardPx / 2;
+    int centerY = m + boardPx / 2;
+    double s = scaleFactor();
+    int btnW = qBound(140, static_cast<int>(200 * s), 260);
+    int btnH = qBound(36, static_cast<int>(48 * s), 62);
+    return QRect(centerX - btnW / 2, centerY + qBound(8, static_cast<int>(20 * s), 30), btnW, btnH);
 }
 
 QRect BoardWidget::bodyButtonRect(const QRect& tileRect) const {
@@ -124,25 +137,94 @@ void BoardWidget::paintEvent(QPaintEvent*) {
     int m = MARGIN;
     double s = scaleFactor();
 
-    painter.fillRect(rect(), QColor("#8F1A10"));
+    // 背景：木质暖灰
+    painter.fillRect(rect(), QColor("#E8E0D8"));
 
     QRect boardOuter(m, m, boardPx, boardPx);
-    painter.fillRect(boardOuter, QColor("#E6C8C8"));
-    painter.setPen(QPen(QColor("#8E3838"), 2));
+    // 棋盘底色：木质调米白
+    painter.fillRect(boardOuter, QColor("#FDF8F2"));
+    painter.setPen(QPen(QColor("#8B1A1A"), 3));
     painter.drawRect(boardOuter);
 
     QRect center(m + cell, m + cell,
                  (CELLS_PER_SIDE - 2) * cell,
                  (CELLS_PER_SIDE - 2) * cell);
-    painter.fillRect(center, QColor("#F5E8E8"));
-    painter.setPen(QPen(QColor("#D6A7A7"), 2));
+    // 中心区域：纯白
+    painter.fillRect(center, QColor("#FFFFFF"));
+    painter.setPen(QPen(QColor("#8B1A1A"), 2));
     painter.drawRect(center);
 
-    int titleSize = qBound(12, static_cast<int>(24 * s), 36);
-    QFont titleFont("Microsoft YaHei", titleSize, QFont::Bold);
-    painter.setFont(titleFont);
-    painter.setPen(QColor("#8F1A10"));
-    painter.drawText(center, Qt::AlignHCenter | Qt::AlignVCenter, "程设大富翁\nmOnOPoly");
+    // ── 中心区域：标题 / 开始按钮 ──
+    bool noGame = (m_board == nullptr || m_players == nullptr || m_players->isEmpty());
+
+    int cTop = center.top();
+    int cH = center.height();
+    int cW = center.width();
+    QPoint cCenter = center.center();
+
+    if (noGame) {
+        // 上部 45%：标题
+        int titleAreaH = cH * 45 / 100;
+        int titleFontSz = qBound(8, titleAreaH / 4, 36);
+        QFont tFont("Microsoft YaHei", titleFontSz, QFont::Bold);
+        painter.setFont(tFont);
+        painter.setPen(QColor("#8B1A1A"));
+        QRect titleRect(cCenter.x() - cW/2 + 8, cTop + titleAreaH/6,
+                        cW - 16, titleAreaH * 2 / 3);
+        painter.drawText(titleRect, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                         "程序设计实习\nmOnOPoly");
+
+        // 装饰线
+        int lineY = cTop + titleAreaH * 4 / 5;
+        int lineW = qMin(cW * 3 / 5, 200);
+        painter.setPen(QPen(QColor("#8B1A1A"), 2));
+        painter.drawLine(QPoint(cCenter.x() - lineW/2, lineY),
+                         QPoint(cCenter.x() + lineW/2, lineY));
+
+        // 下部：开始按钮（扁平纯色）
+        int btnAreaTop = cTop + titleAreaH;
+        int btnAreaH = cH - titleAreaH;
+        int btnW = qMin(cW * 3 / 4, 260);
+        int btnH = qMin(btnAreaH * 7 / 10, 56);
+        btnH = qMax(btnH, 28);
+        QRect btnRect(cCenter.x() - btnW/2,
+                      btnAreaTop + (btnAreaH - btnH)/2,
+                      btnW, btnH);
+        int btnRadius = qMin(btnH / 4, 14);
+
+        // 按钮主体 — 纯色无渐变无发光
+        painter.setBrush(QColor("#B22222"));
+        painter.setPen(QPen(QColor("#8B1A1A"), 2));
+        painter.drawRoundedRect(btnRect, btnRadius, btnRadius);
+
+        // 按钮文字
+        int btnFontSz = qBound(10, btnH / 2, 22);
+        QFont btnFont("Microsoft YaHei", btnFontSz, QFont::Bold);
+        btnFont.setLetterSpacing(QFont::AbsoluteSpacing, qBound(1, btnW / 40, 5));
+        painter.setFont(btnFont);
+        painter.setPen(QColor("#FFFFFF"));
+        painter.drawText(btnRect, Qt::AlignCenter, "开 始 游 戏");
+
+        m_startBtnRect = btnRect;
+
+    } else {
+        // 游戏中：标题居中
+        int titleFontSz = qBound(10, cH / 6, 36);
+        QFont tFont("Microsoft YaHei", titleFontSz, QFont::Bold);
+        painter.setFont(tFont);
+        painter.setPen(QColor("#8B1A1A"));
+        QRect titleRect(cCenter.x() - cW/2 + 8, cCenter.y() - cH/4,
+                        cW - 16, cH/2);
+        painter.drawText(titleRect, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                         "程序设计实习\nmOnOPoly");
+
+        // 装饰线
+        int lineY = cCenter.y() + cH/8;
+        int lineW = qMin(cW * 3 / 5, 200);
+        painter.setPen(QPen(QColor("#8B1A1A"), 2));
+        painter.drawLine(QPoint(cCenter.x() - lineW/2, lineY),
+                         QPoint(cCenter.x() + lineW/2, lineY));
+    }
 
     for (int i = 0; i < BOARD_SIZE; ++i) {
         QRect r = tileRect(i);
@@ -159,43 +241,44 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
     Tile* tile = m_board->tileAt(index);
     if (!tile) return;
 
-    bool isCorner = (index == 0 || index == 7 || index == 14 || index == 21);
     double s = scaleFactor();
 
     QColor bg = colorForGroup(index);
 
     switch (tile->type()) {
     case TileType::START:
-        bg = QColor("#FFEB3B");
+        bg = QColor("#E8D44D");
         break;
     case TileType::SHOP:
-        bg = QColor("#FFD54F");
+        bg = QColor("#E8C95A");
         break;
     case TileType::SHOP_ENTRANCE:
-        bg = QColor("#FFCC80");
+        bg = QColor("#E8B878");
         break;
     case TileType::COMPUTER_LAB:
-        bg = QColor("#80DEEA");
+        bg = QColor("#7EC8D0");
         break;
     case TileType::QA:
-        bg = QColor("#CE93D8");
+        bg = QColor("#C49DCE");
         break;
     case TileType::TAX:
-        bg = QColor("#EF9A9A");
+        bg = QColor("#D99191");
         break;
     case TileType::ITERATOR:
-        bg = QColor("#80CBC4");
+        bg = QColor("#7AB8B0");
         break;
     default:
         break;
     }
 
-    painter.setPen(QPen(Qt::black, 1));
+    // 地块主体
+    int radius = qBound(2, static_cast<int>(4 * s), 6);
+    painter.setPen(QPen(QColor("#3D2820"), 1));
     painter.setBrush(bg);
-    painter.drawRoundedRect(rect.adjusted(0, 0, -1, -1), qBound(2, static_cast<int>(3 * s), 4), qBound(2, static_cast<int>(3 * s), 4));
+    painter.drawRoundedRect(rect.adjusted(0, 0, -1, -1), radius, radius);
 
-    // 标题栏
-    int barH = qBound(8, static_cast<int>((isCorner ? 16 : 12) * s), 22);
+    // 标题栏 — 纯色扁平
+    int barH = qBound(8, static_cast<int>(16 * s), 22);
     QRect bar = rect.adjusted(1, 1, -1, 0);
     bar.setHeight(barH);
 
@@ -203,124 +286,160 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
     if (tile->group() != ColorGroup::NONE) {
         barColor = colorForGroup(index);
     } else {
-        barColor = bg.darker(130);
+        barColor = bg.darker(125);
     }
     painter.fillRect(bar, barColor);
 
-    int barFontSz = qBound(4, static_cast<int>((isCorner ? 7 : 6) * s), 10);
+    int barFontSz = qBound(4, static_cast<int>(7 * s), 10);
     QFont barFont("Microsoft YaHei", barFontSz, QFont::Bold);
     painter.setFont(barFont);
     int luminance = (barColor.red() * 299 + barColor.green() * 587 + barColor.blue() * 114) / 1000;
-    painter.setPen(luminance > 128 ? Qt::black : Qt::white);
+    painter.setPen(luminance > 128 ? QColor("#2C1810") : QColor("#FFFFFF"));
     int btnW = qBound(10, static_cast<int>(14 * s), 20);
     QRect barTextRect = bar.adjusted(2, 0, -(btnW + 3), 0);
     painter.drawText(barTextRect, Qt::AlignVCenter | Qt::AlignLeft, tile->titleBarText());
 
     // 标题栏按钮 [i]
-    QRect tbBtn = titleBarButtonRect(rect, isCorner);
-    painter.setPen(QPen(barColor.darker(150), 1));
-    painter.setBrush(barColor.lighter(130));
-    painter.drawRoundedRect(tbBtn, 2, 2);
-    painter.setPen(luminance > 128 ? Qt::black : Qt::white);
-    int btnFontSz = qBound(4, static_cast<int>((isCorner ? 8 : 6) * s), 10);
+    QRect tbBtn = titleBarButtonRect(rect);
+    painter.setPen(QPen(barColor.darker(160), 1));
+    painter.setBrush(barColor.lighter(120));
+    painter.drawRoundedRect(tbBtn, 3, 3);
+    painter.setPen(luminance > 128 ? QColor("#4A3028") : QColor("#FFFFFF"));
+    int btnFontSz = qBound(4, static_cast<int>(8 * s), 10);
     QFont btnFont("Arial", btnFontSz, QFont::Bold);
     painter.setFont(btnFont);
     painter.drawText(tbBtn, Qt::AlignCenter, "i");
 
-    // 格子主体内容
+    // ── 格子主体内容 ──
     int topOffset = barH + qBound(2, static_cast<int>(3 * s), 4);
-    QRect textRect = rect.adjusted(2, topOffset, -2, -2);
+    QRect bodyRect = rect.adjusted(2, topOffset, -2, -2);
 
-    int nameFontSz = qBound(4, static_cast<int>((isCorner ? 8 : 7) * s), 11);
-    QFont nameFont("Microsoft YaHei", nameFontSz, QFont::Bold);
-    painter.setFont(nameFont);
-    painter.setPen(Qt::black);
-    painter.drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, tile->name());
+    bool isSpecial = (tile->type() == TileType::QA ||
+                      tile->type() == TileType::START ||
+                      tile->type() == TileType::SHOP ||
+                      tile->type() == TileType::COMPUTER_LAB ||
+                      tile->type() == TileType::SHOP_ENTRANCE ||
+                      tile->type() == TileType::ITERATOR);
 
-    // 特殊符号
-    int symFontSz = qBound(6, static_cast<int>((isCorner ? 14 : 10) * s), 20);
-    QFont symFont("Arial", symFontSz, QFont::Bold);
-    painter.setFont(symFont);
+    if (isSpecial) {
+        // 特殊格：上部名称 + 下部大图标
+        int nameH = bodyRect.height() * 30 / 100;
+        QRect nameArea = bodyRect;
+        nameArea.setHeight(nameH);
+        int nameFontSz = qBound(4, static_cast<int>(7 * s), 11);
+        QFont spNameFont("Microsoft YaHei", nameFontSz, QFont::Bold);
+        painter.setFont(spNameFont);
+        painter.setPen(QColor("#3D2820"));
+        painter.drawText(nameArea, Qt::AlignHCenter | Qt::AlignBottom, tile->name());
 
-    if (tile->type() == TileType::QA) {
-        painter.setPen(QColor("#6A1B9A"));
-        painter.drawText(rect, Qt::AlignCenter, "Q");
-    } else if (tile->type() == TileType::START) {
-        painter.setPen(Qt::black);
-        painter.drawText(rect, Qt::AlignCenter, "GO");
-    } else if (tile->type() == TileType::SHOP) {
-        painter.setPen(QColor("#E65100"));
-        painter.drawText(rect, Qt::AlignCenter, "¥");
-    } else if (tile->type() == TileType::COMPUTER_LAB) {
-        painter.setPen(QColor("#006064"));
-        painter.drawText(rect, Qt::AlignCenter, "PC");
-    } else if (tile->type() == TileType::SHOP_ENTRANCE) {
-        painter.setPen(QColor("#BF360C"));
-        painter.drawText(rect, Qt::AlignCenter, ">>");
-    } else if (tile->type() == TileType::ITERATOR) {
-        painter.setPen(QColor("#00695C"));
-        painter.drawText(rect, Qt::AlignCenter, "<>");
-    }
+        // 图标区域
+        QRect iconArea(bodyRect.left(), bodyRect.top() + nameH,
+                       bodyRect.width(), bodyRect.height() - nameH);
+        int symFontSz = qBound(8, iconArea.height() * 65 / 100, 22);
+        QFont symFont("Arial", symFontSz, QFont::Bold);
+        painter.setFont(symFont);
 
-    // 价格
-    auto* pt = dynamic_cast<PropertyTile*>(tile);
-    auto* ut = dynamic_cast<UtilityTile*>(tile);
-    auto* rt = dynamic_cast<RailroadTile*>(tile);
-    auto* it_tile = dynamic_cast<IteratorTile*>(tile);
+        switch (tile->type()) {
+        case TileType::QA:
+            painter.setPen(QColor("#7B3A8A"));
+            painter.drawText(iconArea, Qt::AlignCenter, "?");
+            break;
+        case TileType::START:
+            painter.setPen(QColor("#5D2E0C"));
+            painter.drawText(iconArea, Qt::AlignCenter, "✦");
+            break;
+        case TileType::SHOP:
+            painter.setPen(QColor("#B85C10"));
+            painter.drawText(iconArea, Qt::AlignCenter, "¥");
+            break;
+        case TileType::COMPUTER_LAB:
+            painter.setPen(QColor("#1A6B72"));
+            painter.drawText(iconArea, Qt::AlignCenter, "⌨");
+            break;
+        case TileType::SHOP_ENTRANCE:
+            painter.setPen(QColor("#9B3A0A"));
+            painter.drawText(iconArea, Qt::AlignCenter, "→");
+            break;
+        case TileType::ITERATOR:
+            painter.setPen(QColor("#1A6B60"));
+            painter.drawText(iconArea, Qt::AlignCenter, "↻");
+            break;
+        default: break;
+        }
+    } else {
+        // 普通格（地产/公共设施/铁路/迭代器格）：上部名称 + 下部价格
+        int nameH = bodyRect.height() * 55 / 100;
+        QRect nameArea = bodyRect;
+        nameArea.setHeight(nameH);
+        int nameFontSz = qBound(4, static_cast<int>(7 * s), 11);
+        QFont propNameFont("Microsoft YaHei", nameFontSz, QFont::Bold);
+        painter.setFont(propNameFont);
+        painter.setPen(QColor("#3D2820"));
+        painter.drawText(nameArea, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                         tile->name());
 
-    if (pt || ut || rt || it_tile) {
+        // 价格区域
+        int priceAreaTop = bodyRect.top() + nameH;
+        QRect priceArea(bodyRect.left(), priceAreaTop,
+                        bodyRect.width(), bodyRect.height() - nameH - 2);
+
+        // 房屋标记（如果有）
+        if (auto* prop = dynamic_cast<PropertyTile*>(tile)) {
+            if (prop->houses() > 0 && !prop->hasHotel()) {
+                painter.setPen(QColor("#2E7D32"));
+                int hfSz = qBound(4, static_cast<int>(7 * s), 10);
+                QFont hf("Arial", hfSz, QFont::Bold);
+                painter.setFont(hf);
+                painter.drawText(QRect(priceArea.left(), priceArea.top(),
+                                       priceArea.width(), priceArea.height() / 2),
+                                 Qt::AlignHCenter | Qt::AlignBottom,
+                                 "▣" + QString::number(prop->houses()));
+            } else if (prop->hasHotel()) {
+                painter.setPen(QColor("#C0392B"));
+                int hfSz = qBound(4, static_cast<int>(8 * s), 11);
+                QFont hf("Arial", hfSz, QFont::Bold);
+                painter.setFont(hf);
+                painter.drawText(QRect(priceArea.left(), priceArea.top(),
+                                       priceArea.width(), priceArea.height() / 2),
+                                 Qt::AlignHCenter | Qt::AlignBottom, "H");
+            }
+        }
+
+        // 价格
         int priceFontSz = qBound(4, static_cast<int>(7 * s), 10);
         QFont priceFont("Arial", priceFontSz);
         painter.setFont(priceFont);
-        int price = pt ? pt->price() : (ut ? ut->price() : (rt ? rt->price() : (it_tile ? it_tile->price() : 0)));
 
-        Player* owner = pt ? pt->owner() : (ut ? ut->owner() : (rt ? rt->owner() : (it_tile ? it_tile->owner() : nullptr)));
+        auto* pt = dynamic_cast<PropertyTile*>(tile);
+        auto* ut = dynamic_cast<UtilityTile*>(tile);
+        auto* rt = dynamic_cast<RailroadTile*>(tile);
+        auto* it_tile = dynamic_cast<IteratorTile*>(tile);
+        int price = pt ? pt->price() : (ut ? ut->price() : (rt ? rt->price() :
+                     (it_tile ? it_tile->price() : 0)));
+        Player* owner = pt ? pt->owner() : (ut ? ut->owner() : (rt ? rt->owner() :
+                        (it_tile ? it_tile->owner() : nullptr)));
 
+        QRect priceRect(priceArea.left(), priceArea.top() + priceArea.height()/2,
+                        priceArea.width(), priceArea.height()/2);
         if (owner) {
             painter.setPen(owner->color().darker(150));
-            painter.drawText(rect.adjusted(1, 0, -1, -2),
-                             Qt::AlignBottom | Qt::AlignHCenter,
-                             "¥" + QString::number(price));
         } else {
-            painter.setPen(QColor(0,0,0));
-            painter.drawText(rect.adjusted(1, 0, -1, -2),
-                             Qt::AlignBottom | Qt::AlignHCenter,
-                             "¥" + QString::number(price));
+            painter.setPen(QColor("#3D2820"));
         }
-    }
-
-    // 房屋标记
-    if (auto* prop = dynamic_cast<PropertyTile*>(tile)) {
-        if (prop->houses() > 0 && !prop->hasHotel()) {
-            painter.setPen(Qt::darkGreen);
-            int hfSz = qBound(4, static_cast<int>(7 * s), 10);
-            QFont hf("Arial", hfSz, QFont::Bold);
-            painter.setFont(hf);
-            int offset = qBound(8, static_cast<int>(14 * s), 20);
-            painter.drawText(rect.adjusted(1, 0, -1, -offset),
-                             Qt::AlignBottom | Qt::AlignHCenter,
-                             "▣" + QString::number(prop->houses()));
-        } else if (prop->hasHotel()) {
-            painter.setPen(Qt::red);
-            int hfSz = qBound(4, static_cast<int>(8 * s), 11);
-            QFont hf("Arial", hfSz, QFont::Bold);
-            painter.setFont(hf);
-            int offset = qBound(8, static_cast<int>(14 * s), 20);
-            painter.drawText(rect.adjusted(1, 0, -1, -offset),
-                             Qt::AlignBottom | Qt::AlignHCenter, "H");
-        }
+        painter.drawText(priceRect, Qt::AlignHCenter | Qt::AlignVCenter,
+                         "¥" + QString::number(price));
     }
 
     // 格子主体按钮 [...]
     QRect bodyBtn = bodyButtonRect(rect);
-    painter.setPen(QPen(QColor("#888888"), 1));
-    painter.setBrush(QColor("#F5F5F5"));
-    painter.drawRoundedRect(bodyBtn, 2, 2);
-    painter.setPen(QColor("#666666"));
+    painter.setPen(QPen(QColor("#A09080"), 1));
+    painter.setBrush(QColor("#F5F0EB"));
+    painter.drawRoundedRect(bodyBtn, 3, 3);
+    painter.setPen(QColor("#7A6A58"));
     int bbFontSz = qBound(4, static_cast<int>(7 * s), 10);
     QFont bbFont("Arial", bbFontSz, QFont::Bold);
     painter.setFont(bbFont);
-    painter.drawText(bodyBtn, Qt::AlignCenter, "...");
+    painter.drawText(bodyBtn, Qt::AlignCenter, "···");
 }
 
 
@@ -329,8 +448,11 @@ void BoardWidget::drawPlayers(QPainter& painter) {
     if (!m_players || m_players->isEmpty()) return;
 
     double s = scaleFactor();
-    int dotSize = qBound(8, static_cast<int>(12 * s), 18);
-    int spacing = dotSize + 1;
+    int badgeW = qBound(16, static_cast<int>(22 * s), 28);
+    int badgeH = qBound(10, static_cast<int>(13 * s), 18);
+    int badgeR = qBound(2, static_cast<int>(3 * s), 5);
+    int gap = qBound(2, static_cast<int>(2 * s), 3);
+    painter.setRenderHint(QPainter::Antialiasing);
 
     for (int i = 0; i < m_players->size(); ++i) {
         Player* p = (*m_players)[i];
@@ -347,28 +469,42 @@ void BoardWidget::drawPlayers(QPainter& painter) {
             }
         }
 
-        int col = sameTileCount % 4;
-        int row = sameTileCount / 4;
-        int x = tileR.x() + 3 + col * spacing;
-        int y = tileR.y() + 3 + row * spacing;
+        int maxPerRow = 2;
+        int col = sameTileCount % maxPerRow;
+        int row = sameTileCount / maxPerRow;
+        int marginR = qBound(16, static_cast<int>(22 * s), 28);
+        int marginB = qBound(2, static_cast<int>(3 * s), 5);
+        int startX = tileR.right() - marginR - (maxPerRow - 1) * (badgeW + gap);
+        int startY = tileR.bottom() - marginB - badgeH - row * (badgeH + gap);
+        int x = startX + col * (badgeW + gap);
+        int y = startY;
+        QRect badgeRect(x, y, badgeW, badgeH);
 
+        // 纯色扁平徽章
         painter.setBrush(p->color());
-        painter.setPen(QPen(Qt::white, 1));
-        painter.drawEllipse(QPointF(x + dotSize/2.0, y + dotSize/2.0),
-                            dotSize/2.0, dotSize/2.0);
+        painter.setPen(QPen(QColor("#FFFFFF"), 1));
+        painter.drawRoundedRect(badgeRect, badgeR, badgeR);
 
-        painter.setPen(Qt::white);
-        int idFontSz = qBound(4, static_cast<int>(6 * s), 9);
+        // 编号 — 白色文字
+        painter.setPen(QColor("#FFFFFF"));
+        int idFontSz = qBound(5, static_cast<int>(7 * s), 10);
         QFont idFont("Arial", idFontSz, QFont::Bold);
         painter.setFont(idFont);
-        painter.drawText(QRect(x, y, dotSize, dotSize),
-                         Qt::AlignCenter, QString::number(p->id() + 1));
+        painter.drawText(badgeRect, Qt::AlignCenter, QString::number(p->id() + 1));
     }
 }
 
 
 // ==================== 鼠标点击 ====================
 void BoardWidget::mousePressEvent(QMouseEvent* event) {
+    // 检查是否点击了中央开始按钮
+    if (!m_board || (m_players && m_players->isEmpty())) {
+        if (m_startBtnRect.isValid() && m_startBtnRect.contains(event->pos())) {
+            emit startGameRequested();
+            return;
+        }
+    }
+
     if (!m_board) return;
 
     for (int i = 0; i < BOARD_SIZE; ++i) {
@@ -380,7 +516,7 @@ void BoardWidget::mousePressEvent(QMouseEvent* event) {
 
         bool isCorner = (i == 0 || i == 7 || i == 14 || i == 21);
 
-        if (titleBarButtonRect(tr, isCorner).contains(event->pos())) {
+        if (titleBarButtonRect(tr).contains(event->pos())) {
             QMessageBox::information(this, t->name() + " — 说明",
                                      t->titleDetail());
             return;
