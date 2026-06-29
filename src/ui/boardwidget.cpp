@@ -126,6 +126,13 @@ QRect BoardWidget::bodyButtonRect(const QRect& tileRect) const {
     return QRect(tileRect.right() - bw - 3, tileRect.bottom() - bh - 3, bw, bh);
 }
 
+QRect BoardWidget::pieceAreaRect(const QRect& tileRect) const {
+    double s = static_cast<double>(tileRect.width()) / REFERENCE_CELL;
+    int barH = qBound(8, static_cast<int>(16 * s), 22);
+    int pieceH = qBound(8, static_cast<int>(14 * s), 20);
+    return QRect(tileRect.left() + 2, tileRect.top() + barH, tileRect.width() - 4, pieceH);
+}
+
 
 // ==================== 主绘制 ====================
 void BoardWidget::paintEvent(QPaintEvent*) {
@@ -310,8 +317,13 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
     painter.setFont(btnFont);
     painter.drawText(tbBtn, Qt::AlignCenter, "i");
 
+    // 棋子区 — 标题栏下方的专用横框（供玩家棋子放置）
+    int pieceH = qBound(8, static_cast<int>(14 * s), 20);
+    QRect pieceArea(rect.left() + 2, bar.bottom(), rect.width() - 4, pieceH);
+    painter.fillRect(pieceArea, bg.lighter(108));
+
     // ── 格子主体内容 ──
-    int topOffset = barH + qBound(2, static_cast<int>(3 * s), 4);
+    int topOffset = barH + pieceH + qBound(1, static_cast<int>(2 * s), 3);
     QRect bodyRect = rect.adjusted(2, topOffset, -2, -2);
 
     bool isSpecial = (tile->type() == TileType::QA ||
@@ -368,7 +380,7 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
         }
     } else {
         // 普通格（地产/公共设施/铁路/迭代器格）：上部名称 + 下部价格
-        int nameH = bodyRect.height() * 55 / 100;
+        int nameH = bodyRect.height() * 48 / 100;
         QRect nameArea = bodyRect;
         nameArea.setHeight(nameH);
         int nameFontSz = qBound(4, static_cast<int>(7 * s), 11);
@@ -380,12 +392,15 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
 
         // 价格区域
         int priceAreaTop = bodyRect.top() + nameH;
+        int bottomPad = qBound(0, static_cast<int>(1 * s), 2);
         QRect priceArea(bodyRect.left(), priceAreaTop,
-                        bodyRect.width(), bodyRect.height() - nameH - 2);
+                        bodyRect.width(), bodyRect.height() - nameH - bottomPad);
 
         // 房屋标记（如果有）
+        bool hasHouseMark = false;
         if (auto* prop = dynamic_cast<PropertyTile*>(tile)) {
             if (prop->houses() > 0 && !prop->hasHotel()) {
+                hasHouseMark = true;
                 painter.setPen(QColor("#2E7D32"));
                 int hfSz = qBound(4, static_cast<int>(7 * s), 10);
                 QFont hf("Arial", hfSz, QFont::Bold);
@@ -395,6 +410,7 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
                                  Qt::AlignHCenter | Qt::AlignBottom,
                                  "▣" + QString::number(prop->houses()));
             } else if (prop->hasHotel()) {
+                hasHouseMark = true;
                 painter.setPen(QColor("#C0392B"));
                 int hfSz = qBound(4, static_cast<int>(8 * s), 11);
                 QFont hf("Arial", hfSz, QFont::Bold);
@@ -419,15 +435,25 @@ void BoardWidget::drawTile(QPainter& painter, int index, const QRect& rect) {
         Player* owner = pt ? pt->owner() : (ut ? ut->owner() : (rt ? rt->owner() :
                         (it_tile ? it_tile->owner() : nullptr)));
 
-        QRect priceRect(priceArea.left(), priceArea.top() + priceArea.height()/2,
-                        priceArea.width(), priceArea.height()/2);
-        if (owner) {
-            painter.setPen(owner->color().darker(150));
+        if (hasHouseMark) {
+            QRect priceRect(priceArea.left(), priceArea.top() + priceArea.height()/2,
+                            priceArea.width(), priceArea.height()/2);
+            if (owner) {
+                painter.setPen(owner->color().darker(150));
+            } else {
+                painter.setPen(QColor("#3D2820"));
+            }
+            painter.drawText(priceRect, Qt::AlignHCenter | Qt::AlignVCenter,
+                             "¥" + QString::number(price));
         } else {
-            painter.setPen(QColor("#3D2820"));
+            if (owner) {
+                painter.setPen(owner->color().darker(150));
+            } else {
+                painter.setPen(QColor("#3D2820"));
+            }
+            painter.drawText(priceArea, Qt::AlignHCenter | Qt::AlignVCenter,
+                             "¥" + QString::number(price));
         }
-        painter.drawText(priceRect, Qt::AlignHCenter | Qt::AlignVCenter,
-                         "¥" + QString::number(price));
     }
 
     // 格子主体按钮 [...]
@@ -448,11 +474,15 @@ void BoardWidget::drawPlayers(QPainter& painter) {
     if (!m_players || m_players->isEmpty()) return;
 
     double s = scaleFactor();
-    int badgeW = qBound(16, static_cast<int>(22 * s), 28);
-    int badgeH = qBound(10, static_cast<int>(13 * s), 18);
-    int badgeR = qBound(2, static_cast<int>(3 * s), 5);
-    int gap = qBound(2, static_cast<int>(2 * s), 3);
     painter.setRenderHint(QPainter::Antialiasing);
+
+    // 先统计每个格子上的玩家总数，用于居中布局
+    QVector<int> counts(BOARD_SIZE, 0);
+    for (Player* p : *m_players) {
+        if (!p->isBankrupt() && p->position() >= 0 && p->position() < BOARD_SIZE) {
+            counts[p->position()]++;
+        }
+    }
 
     for (int i = 0; i < m_players->size(); ++i) {
         Player* p = (*m_players)[i];
@@ -469,16 +499,51 @@ void BoardWidget::drawPlayers(QPainter& painter) {
             }
         }
 
-        int maxPerRow = 2;
-        int col = sameTileCount % maxPerRow;
-        int row = sameTileCount / maxPerRow;
-        int marginR = qBound(16, static_cast<int>(22 * s), 28);
-        int marginB = qBound(2, static_cast<int>(3 * s), 5);
-        int startX = tileR.right() - marginR - (maxPerRow - 1) * (badgeW + gap);
-        int startY = tileR.bottom() - marginB - badgeH - row * (badgeH + gap);
+        int totalOnTile = counts[p->position()];
+        QRect pa = pieceAreaRect(tileR);
+        int margin = qBound(1, static_cast<int>(1 * s), 2);
+        int gap = qBound(1, static_cast<int>(1 * s), 2);
+        int availW = pa.width() - 2 * margin;
+        int availH = pa.height() - 2 * margin;
+
+        // 所有棋子强制排成居中一行
+        int totalRows = 1;
+        int maxPerRow = totalOnTile;
+
+        int badgeH = qMin(availH, static_cast<int>(10 * s));
+        badgeH = qMax(badgeH, 5);
+        int badgeW = qBound(8, static_cast<int>(badgeH * 1.4), static_cast<int>(18 * s));
+
+        // 若单行总宽超出棋子区，等比例压缩徽章宽度以适配
+        int totalW = maxPerRow * badgeW + (maxPerRow - 1) * gap;
+        if (totalW > availW) {
+            badgeW = (availW - (maxPerRow - 1) * gap) / maxPerRow;
+            badgeW = qMax(badgeW, 7);
+            // 压缩后适当降低高度，避免过于瘦高
+            badgeH = qMin(badgeH, static_cast<int>(badgeW * 0.8));
+            badgeH = qMax(badgeH, 4);
+        }
+
+        // 最终限制
+        badgeH = qMin(badgeH, static_cast<int>(13 * s));
+        badgeW = qMin(badgeW, static_cast<int>(22 * s));
+        badgeH = qMax(badgeH, 4);
+        badgeW = qMax(badgeW, 7);
+
+        int col = sameTileCount;
+        int row = 0;
+
+        totalW = maxPerRow * badgeW + (maxPerRow - 1) * gap;
+        int totalH = badgeH;
+
+        int startX = pa.left() + margin + (availW - totalW) / 2;
+        int startY = pa.top() + margin + (availH - totalH) / 2;
+
         int x = startX + col * (badgeW + gap);
-        int y = startY;
+        int y = startY + row * (badgeH + gap);
+
         QRect badgeRect(x, y, badgeW, badgeH);
+        int badgeR = qBound(1, static_cast<int>(2 * s), 4);
 
         // 纯色扁平徽章
         painter.setBrush(p->color());
@@ -487,7 +552,7 @@ void BoardWidget::drawPlayers(QPainter& painter) {
 
         // 编号 — 白色文字
         painter.setPen(QColor("#FFFFFF"));
-        int idFontSz = qBound(5, static_cast<int>(7 * s), 10);
+        int idFontSz = qBound(4, static_cast<int>(badgeH * 0.5), 10);
         QFont idFont("Arial", idFontSz, QFont::Bold);
         painter.setFont(idFont);
         painter.drawText(badgeRect, Qt::AlignCenter, QString::number(p->id() + 1));

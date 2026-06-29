@@ -36,6 +36,7 @@ private:
     void drawTile(QPainter& painter, int index, const QRect& rect);
     void drawPlayers(QPainter& painter);
     QColor colorForGroup(int tileIndex) const;
+    QRect pieceAreaRect(const QRect& tileRect) const;
 
     // 按钮点击区域计算
     QRect titleBarButtonRect(const QRect& tileRect) const;
@@ -50,7 +51,7 @@ private:
     double scaleFactor() const;
 
     static constexpr int CELLS_PER_SIDE = 8;   // 8格/边（含两个角格）
-    static constexpr int MARGIN = 10;
+    static constexpr int MARGIN = 8;
     static constexpr int REFERENCE_CELL = 68;  // 基准cell大小，用于缩放UI元素（配合8格/边）
 };
 
