@@ -361,7 +361,7 @@ void MainWindow::startNewGame() {
             // 名称行
             auto* nameRow = new QHBoxLayout();
             auto* nameLabel = new QLabel("名称", card);
-            nameLabel->setFixedWidth(32);
+            nameLabel->setMinimumWidth(40);
             nameLabel->setStyleSheet("color: #8B1A1A; font-size: 12px;");
             nameRow->addWidget(nameLabel);
             pcw.nameEdit = new QLineEdit(defaultNames[i], card);
@@ -375,7 +375,7 @@ void MainWindow::startNewGame() {
             // 类型行
             auto* typeRow = new QHBoxLayout();
             auto* typeLabel = new QLabel("类型", card);
-            typeLabel->setFixedWidth(32);
+            typeLabel->setMinimumWidth(40);
             typeLabel->setStyleSheet("color: #8B1A1A; font-size: 12px;");
             typeRow->addWidget(typeLabel);
 
@@ -402,7 +402,7 @@ void MainWindow::startNewGame() {
             auto* diffRowLayout = new QHBoxLayout(pcw.difficultyRow);
             diffRowLayout->setContentsMargins(0, 0, 0, 0);
             auto* diffLabel = new QLabel("难度", card);
-            diffLabel->setFixedWidth(32);
+            diffLabel->setMinimumWidth(40);
             diffLabel->setStyleSheet("color: #8B1A1A; font-size: 12px;");
             diffRowLayout->addWidget(diffLabel);
             pcw.diffCombo = new QComboBox(card);
