@@ -451,6 +451,8 @@ void MainWindow::startNewGame() {
     if (dlg.exec() != QDialog::Accepted) {
         delete m_game;
         m_game = nullptr;
+        m_boardWidget->setBoard(nullptr);
+        m_boardWidget->setPlayers(nullptr);
         return;
     }
 
