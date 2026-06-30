@@ -820,8 +820,12 @@ void Game::declineIteratorCard() {
     // 继续正常的landOn逻辑（购买或付租）
     if (auto* it = dynamic_cast<IteratorTile*>(tile)) {
         if (it->owner() == nullptr) {
-            emit promptBuyProperty(it->index(), player);
-            m_waitingForDecision = true;
+            if (player->isAI()) {
+                aiDecideBuyProperty(player, it->index());
+            } else {
+                emit promptBuyProperty(it->index(), player);
+                m_waitingForDecision = true;
+            }
             return;
         } else if (it->owner() != player && !it->owner()->isBankrupt()) {
             int rent = it->calculateRent();
