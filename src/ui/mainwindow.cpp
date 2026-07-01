@@ -202,7 +202,6 @@ void MainWindow::connectSignals() {
 // ==================== 游戏流程 ====================
 void MainWindow::startNewGame() {
     endCurrentGame();
-    Board::reset();
 
     m_game = new Game(this);
     m_boardWidget->setBoard(&m_game->board());
@@ -1038,9 +1037,13 @@ void MainWindow::onPromptQA(Player* player, int tileIndex) {
         dlg->accept();
         m_game->answerQA(player, player->position(), grp->checkedId());
     });
-    connect(cancelButton, &QPushButton::clicked, this, [this, dlg]() {
-        dlg->reject();
-        m_game->skipAction();
+    connect(cancelButton, &QPushButton::clicked, dlg, &QDialog::reject);
+
+    // 处理用户直接关闭窗口（点击 X）
+    connect(dlg, &QDialog::finished, this, [this](int result) {
+        if (result == QDialog::Rejected) {
+            m_game->skipAction();
+        }
     });
 
     dlg->show();
@@ -1080,9 +1083,13 @@ void MainWindow::onPromptComputerLab(Player* player) {
         dlg->accept();
         m_game->answerComputerLab(player, grp->checkedId());
     });
-    connect(cancelButton, &QPushButton::clicked, this, [this, dlg]() {
-        dlg->reject();
-        m_game->skipAction();
+    connect(cancelButton, &QPushButton::clicked, dlg, &QDialog::reject);
+
+    // 处理用户直接关闭窗口（点击 X）
+    connect(dlg, &QDialog::finished, this, [this](int result) {
+        if (result == QDialog::Rejected) {
+            m_game->skipAction();
+        }
     });
 
     dlg->show();

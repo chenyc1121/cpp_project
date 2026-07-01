@@ -51,6 +51,7 @@ void Game::resetGame() {
     m_waitingForCardDecision = false;
     m_skipLanding = false;
     m_debugKnowledgePrompted = false;
+    m_knowledgeTriggeredThisTurn = false;
     m_lastDie1 = m_lastDie2 = m_lastDiceTotal = 0;
 
     m_board->reset();
@@ -78,6 +79,7 @@ void Game::rollDice() {
 
     m_state = GameState::ROLLING;
     m_debugKnowledgePrompted = false;  // 新回合，重置询问标记
+    m_knowledgeTriggeredThisTurn = false;
     emit gameStateChanged(m_state);
 
     Player* player = currentPlayer();
@@ -130,6 +132,7 @@ void Game::debugRollDice(int die1, int die2) {
 
     m_state = GameState::ROLLING;
     m_debugKnowledgePrompted = false;  // 新回合，重置询问标记
+    m_knowledgeTriggeredThisTurn = false;
     emit gameStateChanged(m_state);
 
     Player* player = currentPlayer();
@@ -322,10 +325,12 @@ void Game::endTurn() {
         if (m_debugMode && !m_debugKnowledgePrompted) {
             // DEBUG 模式：首次询问是否触发
             m_debugKnowledgePrompted = true;
+            m_knowledgeTriggeredThisTurn = true;
             emit promptDebugKnowledge(player);
             return;
-        } else if (QRandomGenerator::global()->bounded(100) < 10) {
-            // 正常模式：10% 概率
+        } else if (!m_knowledgeTriggeredThisTurn && QRandomGenerator::global()->bounded(100) < 10) {
+            // 正常模式：10% 概率（每回合最多触发一次）
+            m_knowledgeTriggeredThisTurn = true;
             KnowledgeEntry ke = KnowledgeBank::drawRandom();
             if (!ke.title.isEmpty()) {
                 logEvent(player->name() + " 触发了知识点事件！");

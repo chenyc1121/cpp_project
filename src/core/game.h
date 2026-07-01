@@ -166,6 +166,7 @@ private:
     bool m_waitingForCardDecision = false;
     bool m_debugMode = false;
     bool m_debugKnowledgePrompted = false;
+    bool m_knowledgeTriggeredThisTurn = false;
     bool m_skipLanding = false;
     EffectCardType m_pendingCardType = EffectCardType::ROLL_AGAIN;
     Question m_currentQuestion;
