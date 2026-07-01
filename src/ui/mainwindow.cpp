@@ -202,6 +202,7 @@ void MainWindow::connectSignals() {
 // ==================== 游戏流程 ====================
 void MainWindow::startNewGame() {
     endCurrentGame();
+    Board::reset();
 
     m_game = new Game(this);
     m_boardWidget->setBoard(&m_game->board());
@@ -1034,8 +1035,8 @@ void MainWindow::onPromptQA(Player* player, int tileIndex) {
     layout->addLayout(buttonLayout);
 
     connect(answerButton, &QPushButton::clicked, this, [this, dlg, player, grp]() {
-        m_game->answerQA(player, player->position(), grp->checkedId());
         dlg->accept();
+        m_game->answerQA(player, player->position(), grp->checkedId());
     });
     connect(cancelButton, &QPushButton::clicked, this, [this, dlg]() {
         dlg->reject();
@@ -1076,8 +1077,8 @@ void MainWindow::onPromptComputerLab(Player* player) {
     layout->addLayout(buttonLayout);
 
     connect(answerButton, &QPushButton::clicked, this, [this, dlg, player, grp]() {
-        m_game->answerComputerLab(player, grp->checkedId());
         dlg->accept();
+        m_game->answerComputerLab(player, grp->checkedId());
     });
     connect(cancelButton, &QPushButton::clicked, this, [this, dlg]() {
         dlg->reject();
