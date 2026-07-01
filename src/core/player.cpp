@@ -16,12 +16,6 @@ Player::Player(const QString& name, const QColor& color, int id,
 void Player::applyAIPreset(AIDifficulty diff) {
     auto preset = aiDifficultyPreset(diff);
     m_money = preset.initialMoney;
-    for (int i = 0; i < preset.rollAgainCards; ++i)
-        addEffectCard(EffectCardType::ROLL_AGAIN);
-    for (int i = 0; i < preset.universalDiceCards; ++i)
-        addEffectCard(EffectCardType::UNIVERSAL_DICE);
-    for (int i = 0; i < preset.skipEffectCards; ++i)
-        addEffectCard(EffectCardType::SKIP_EFFECT);
 }
 
 

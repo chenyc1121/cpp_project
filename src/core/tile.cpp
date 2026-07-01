@@ -69,8 +69,10 @@ void PropertyTile::landOn(Player* player, Game* game) {
     if (player->isAI()) {
         // AI 自动决策（延迟处理在 Game 方法中完成）
         if (m_owner == nullptr) {
+            game->setWaitingForDecision(true);
             game->aiDecideBuyProperty(player, m_index);
         } else if (m_owner == player) {
+            game->setWaitingForDecision(true);
             game->aiDecideBuildHouse(player, m_index);
         } else if (!m_owner->isBankrupt()) {
             int rent = calculateRent();
@@ -171,6 +173,7 @@ void VirtualfuncTile::landOn(Player* player, Game* game) {
     // === 无主：购买（决策者是踩中方）===
     if (m_owner == nullptr) {
         if (player->isAI()) {
+            game->setWaitingForDecision(true);
             game->aiDecideVirtualFuncBuy(player, m_index);
             return;
         }
@@ -182,6 +185,7 @@ void VirtualfuncTile::landOn(Player* player, Game* game) {
     // === 自己踩中：建房（决策者是踩中方）===
     if (m_owner == player) {
         if (player->isAI()) {
+            game->setWaitingForDecision(true);
             game->aiDecideVirtualFuncBuild(player, m_index);
             return;
         }
@@ -198,6 +202,7 @@ void VirtualfuncTile::landOn(Player* player, Game* game) {
         Player* owner = m_owner;
 
         if (owner->isAI()) {
+            game->setWaitingForDecision(true);
             game->aiDecideVirtualFuncRent(payer, m_index, owner);
             return;
         }
@@ -303,6 +308,7 @@ QATile::QATile(const TileDef& def, int index)
 void QATile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 停在问答格！");
     if (player->isAI()) {
+        game->setWaitingForDecision(true);
         game->aiDecideQA(player, m_index);
         return;
     }
@@ -329,6 +335,7 @@ ShopTile::ShopTile(const TileDef& def, int index)
 void ShopTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 来到商店！");
     if (player->isAI()) {
+        game->setWaitingForDecision(true);
         game->aiDecideShop(player);
         return;
     }
@@ -345,6 +352,7 @@ void ComputerLabTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 进入上机课（计算机实验课），需回答一道题，下回合跳过！");
     player->setSkipNextTurn(true);
     if (player->isAI()) {
+        game->setWaitingForDecision(true);
         game->aiDecideComputerLab(player);
         return;
     }
@@ -360,6 +368,7 @@ ShopEntranceTile::ShopEntranceTile(const TileDef& def, int index)
 void ShopEntranceTile::landOn(Player* player, Game* game) {
     game->logEvent(player->name() + " 经过29楼地下室");
     if (player->isAI()) {
+        game->setWaitingForDecision(true);
         game->aiDecideShopEntrance(player);
         return;
     }
@@ -377,6 +386,7 @@ IteratorTile::IteratorTile(const TileDef& def, int index)
 void IteratorTile::landOn(Player* player, Game* game) {
     if (player->isAI()) {
         // AI 不使用迭代器卡
+        game->setWaitingForDecision(true);
         game->aiDecideIteratorCard(player, m_index);
         return;
     }
@@ -418,6 +428,7 @@ UtilityTile::UtilityTile(const TileDef& def, int index)
 void UtilityTile::landOn(Player* player, Game* game) {
     if (player->isAI()) {
         if (m_owner == nullptr) {
+            game->setWaitingForDecision(true);
             game->aiDecideBuyProperty(player, m_index);
         } else if (m_owner != player && !m_owner->isBankrupt()) {
             int diceTotal = game->lastDiceTotal();
@@ -461,6 +472,7 @@ RailroadTile::RailroadTile(const TileDef& def, int index)
 void RailroadTile::landOn(Player* player, Game* game) {
     if (player->isAI()) {
         if (m_owner == nullptr) {
+            game->setWaitingForDecision(true);
             game->aiDecideBuyProperty(player, m_index);
         } else if (m_owner != player && !m_owner->isBankrupt()) {
             int rent = calculateRent();
