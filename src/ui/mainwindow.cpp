@@ -645,7 +645,7 @@ void MainWindow::updatePropertyDisplay() {
     auto* layout = qobject_cast<QBoxLayout*>(m_propertyContent->layout());
     if (!layout) return;
 
-    // 清除现有内容
+    // 清除现有内容，
     QLayoutItem* item;
     while ((item = layout->takeAt(0)) != nullptr) {
         if (item->widget())
@@ -666,7 +666,7 @@ void MainWindow::updatePropertyDisplay() {
         pgLayout->setSpacing(3);
         pgLayout->setContentsMargins(6, 3, 6, 3);
 
-        // 玩家头部：色点 + 名字
+        // 玩家头部：色点 + 名字，
         auto* headerRow = new QHBoxLayout();
         headerRow->setSpacing(4);
 
