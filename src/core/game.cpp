@@ -322,12 +322,14 @@ void Game::endTurn() {
 
     // 知识点事件：人类玩家回合结束时触发
     if (!player->isAI() && !player->isBankrupt()) {
-        if (m_debugMode && !m_debugKnowledgePrompted) {
-            // DEBUG 模式：首次询问是否触发
-            m_debugKnowledgePrompted = true;
-            m_knowledgeTriggeredThisTurn = true;
-            emit promptDebugKnowledge(player);
-            return;
+        if (m_debugMode) {
+            // DEBUG 模式：首次询问是否触发，后续调用跳过
+            if (!m_debugKnowledgePrompted) {
+                m_debugKnowledgePrompted = true;
+                m_knowledgeTriggeredThisTurn = true;
+                emit promptDebugKnowledge(player);
+                return;
+            }
         } else if (!m_knowledgeTriggeredThisTurn && QRandomGenerator::global()->bounded(100) < 10) {
             // 正常模式：10% 概率（每回合最多触发一次）
             m_knowledgeTriggeredThisTurn = true;

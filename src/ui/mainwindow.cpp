@@ -201,10 +201,9 @@ void MainWindow::connectSignals() {
 
 // ==================== 游戏流程 ====================
 void MainWindow::startNewGame() {
-    endCurrentGame();
-
-    m_game = new Game(this);
-    m_boardWidget->setBoard(&m_game->board());
+    // 先创建临时 Game 用于对话框背景棋盘显示，等用户确认后再清理旧游戏
+    Game* newGame = new Game(this);
+    m_boardWidget->setBoard(&newGame->board());
 
     QVector<QColor> colors = {QColor("#E53935"), QColor("#1E88E5"),
                               QColor("#43A047"), QColor("#FB8C00")};
@@ -449,12 +448,19 @@ void MainWindow::startNewGame() {
     dlg.move(center.x() - dlg.width() / 2, center.y() - dlg.height() / 2);
 
     if (dlg.exec() != QDialog::Accepted) {
-        delete m_game;
-        m_game = nullptr;
-        m_boardWidget->setBoard(nullptr);
-        m_boardWidget->setPlayers(nullptr);
+        // 用户取消：恢复旧游戏棋盘
+        delete newGame;
+        if (m_game) {
+            m_boardWidget->setBoard(&m_game->board());
+        } else {
+            m_boardWidget->setBoard(nullptr);
+        }
         return;
     }
+
+    // 用户确认：清理旧游戏，启用新游戏
+    endCurrentGame();
+    m_game = newGame;
 
     // 创建玩家
     for (int i = 0; i < playerCount; ++i) {
