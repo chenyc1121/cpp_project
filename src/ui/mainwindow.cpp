@@ -1164,8 +1164,8 @@ void MainWindow::onPromptShop(Player* player) {
         if (idx >= 0 && idx < displayCards.size()) {
             const EffectCard& selectedCard = displayCards[idx];
             if (player->canAfford(selectedCard.price)) {
-                m_game->buyEffectCard(player, selectedCard);
                 dlg->accept();
+                m_game->buyEffectCard(player, selectedCard);
             } else {
                 m_game->logEvent(player->name() + " 资金不足，无法购买！");
             }
