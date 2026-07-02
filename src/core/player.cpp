@@ -59,8 +59,10 @@ void Player::moveBy(int steps, Game* game) {
     int oldPos = m_position;
     m_position = (m_position + steps) % BOARD_SIZE;
 
-    if (m_position < oldPos && steps > 0) {
-        game->logEvent(m_name + " 经过起点！");
+    // 经过起点（绕回）且不是正好停在起点时，触发 passBy 奖励
+    // 停在起点的情况由 StartTile::landOn 处理（双倍奖励），避免重复发放
+    if (m_position < oldPos && steps > 0 && m_position != 0) {
+        game->board().tileAt(0)->passBy(this, game);
     }
 
     game->logEvent(m_name + " 从 " + QString::number(oldPos)
