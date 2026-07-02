@@ -308,6 +308,8 @@ void Game::handleLanding() {
 void Game::endTurn() {
     if (m_state == GameState::GAME_OVER) return;
 
+    m_skipLanding = false;
+
     Player* player = currentPlayer();
 
     // 掷出对子可获得额外回合
