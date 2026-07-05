@@ -2,6 +2,10 @@
 
 北大校园主题的 C++ 面向对象编程概念大富翁游戏，基于 Qt6/C++17 开发。
 
+## 演示视频链接
+
+https://disk.pku.edu.cn/link/ARF57A655D91304A95A6BEFE5EE9EE9BF2
+
 ## 🎮 快速开始
 
 ```bash
