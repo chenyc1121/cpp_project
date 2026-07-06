@@ -4,7 +4,7 @@
 
 ## 演示视频链接
 
-https://disk.pku.edu.cn/link/ARF57A655D91304A95A6BEFE5EE9EE9BF2
+https://disk.pku.edu.cn/link/AA6AA3018F99A4460BA69A7B51B9CA1EE0
 
 ## 🎮 快速开始
 
